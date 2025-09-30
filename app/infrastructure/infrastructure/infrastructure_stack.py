@@ -1,6 +1,7 @@
 from aws_cdk import (
     Stack,
     RemovalPolicy,
+    CfnOutput,
     aws_s3 as s3,
     aws_dynamodb as dynamodb,
 )
@@ -74,4 +75,22 @@ class InfrastructureStack(Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             projection_type=dynamodb.ProjectionType.ALL
+        )
+
+
+        # ======================
+        # CDK OUTPUTS
+        # ======================
+        CfnOutput(
+            self, "S3BucketName",
+            value=music_bucket.bucket_name,
+            description="Name of the S3 bucket for music storage",
+            export_name="MusicStorageBucketName"
+        )
+
+        CfnOutput(
+            self, "DynamoDBTableName",
+            value=music_table.table_name,
+            description="Name of the DynamoDB table",
+            export_name="MusicAppTableName"
         )
