@@ -1,0 +1,99 @@
+<div class="browse-music-container">
+  <h1>Music Library</h1>
+
+  <!-- Search and Filters -->
+  <div class="filters-section">
+    <form [formGroup]="filterForm">
+      <div class="filters-grid">
+        <!-- Search -->
+        <div class="filter-group">
+          <label for="searchTerm">Search</label>
+          <input
+            id="searchTerm"
+            type="text"
+            formControlName="searchTerm"
+            class="form-control"
+            placeholder="Search by title, artist, or filename..."
+          />
+        </div>
+
+        <!-- Genre Filter -->
+        <div class="filter-group">
+          <label for="selectedGenre">Genre</label>
+          <select id="selectedGenre" formControlName="selectedGenre" class="form-control">
+            <option value="">All Genres</option>
+            @for (genre of allGenres(); track genre) {
+              <option [value]="genre">{{ genre }}</option>
+            }
+          </select>
+        </div>
+
+        <!-- Artist Filter -->
+        <div class="filter-group">
+          <label for="selectedArtist">Artist</label>
+          <select id="selectedArtist" formControlName="selectedArtist" class="form-control">
+            <option value="">All Artists</option>
+            @for (artist of allArtists(); track artist) {
+              <option [value]="artist">{{ artist }}</option>
+            }
+          </select>
+        </div>
+
+        <!-- File Type Filter -->
+        <div class="filter-group">
+          <label for="fileType">File Type</label>
+          <select id="fileType" formControlName="fileType" class="form-control">
+            <option value="">All Types</option>
+            @for (type of fileTypes(); track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button type="button" class="btn btn-secondary" (click)="clearFilters()">
+          Clear Filters
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Currently Playing -->
+  @if (currentlyPlaying()) {
+    <div class="now-playing">
+      <div class="now-playing-content">
+        <span class="now-playing-label">Now Playing:</span>
+        <span class="now-playing-title">{{ currentlyPlaying()!.title }}</span>
+        <span class="now-playing-artist">
+          by {{ currentlyPlaying()!.artistIds.join(', ') }}
+        </span>
+      </div>
+      <button class="btn btn-danger btn-sm" (click)="stopPlayback()">
+        Stop
+      </button>
+    </div>
+  }
+
+  <!-- Results Info -->
+  <div class="results-info">
+    <span>Showing {{ totalResults() }} track{{ totalResults() !== 1 ? 's' : '' }}</span>
+  </div>
+
+  <!-- Music Content List -->
+  <div class="content-list">
+    @if (filteredContent().length > 0) {
+      @for (content of filteredContent(); track content.fileName) {
+        <app-music-card
+          [content]="content"
+          (onPlay)="onPlayTrack($event)"
+        />
+      }
+    } @else {
+      <div class="no-results">
+        <h3>No music found</h3>
+        <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+      </div>
+    }
+  </div>
+</div>
