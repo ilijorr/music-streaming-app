@@ -13,6 +13,7 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+
 class InfrastructureStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
@@ -30,7 +31,8 @@ class InfrastructureStack(Stack):
             bucket_name=f"music-storage-{account}-{region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,  # Automatically delete objects on bucket deletion
+            # Automatically delete objects on bucket deletion
+            auto_delete_objects=True,
             cors=[
                 s3.CorsRule(
                     allowed_methods=[
