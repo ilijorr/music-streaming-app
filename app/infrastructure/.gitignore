@@ -12,3 +12,5 @@ cdk.out
 # IDE and editor files
 .claude
 .vscode
+
+outputs.json
