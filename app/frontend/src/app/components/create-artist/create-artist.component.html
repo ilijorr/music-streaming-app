@@ -74,13 +74,16 @@
       <div formArrayName="genres">
         @for (genre of genres.controls; track $index) {
           <div class="genre-input">
-            <input
-              type="text"
+            <select
               [formControlName]="$index"
               class="form-control"
               [class.error]="genre.invalid && genre.touched"
-              placeholder="Enter genre"
-            />
+            >
+              <option value="">Select a genre</option>
+              @for (availableGenre of availableGenres; track availableGenre) {
+                <option [value]="availableGenre">{{ availableGenre }}</option>
+              }
+            </select>
             @if (genres.length > 1) {
               <button
                 type="button"

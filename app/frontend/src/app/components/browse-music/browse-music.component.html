@@ -6,6 +6,9 @@
         <span class="user-info">Welcome, {{ currentUser()!.givenName || currentUser()!.username }}!</span>
       }
       @if (isAdmin()) {
+        <button type="button" class="btn btn-secondary" (click)="navigateToCreateArtist()">
+          Create Artist
+        </button>
         <button type="button" class="btn btn-secondary" (click)="navigateToUpload()">
           Upload Music
         </button>

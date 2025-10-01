@@ -5,6 +5,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Artist, CreateArtistRequest } from '../../models/artist.interface';
 import { ArtistService } from '../../services/artist.service';
+import { getAllGenres } from '../../models/genre.enum';
 
 @Component({
   selector: 'app-create-artist',
@@ -22,6 +23,9 @@ export class CreateArtistComponent {
   protected readonly loading = signal<boolean>(false);
   protected readonly error = signal<string | null>(null);
   protected readonly success = signal<boolean>(false);
+
+  // Available genres from enum
+  protected readonly availableGenres = getAllGenres();
 
   protected readonly photoPreview = computed(() => {
     const photo = this.selectedPhoto();
