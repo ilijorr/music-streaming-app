@@ -1,10 +1,12 @@
-import { Component, ChangeDetectionStrategy, signal, computed, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, inject, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MusicCardComponent } from '../music-card/music-card.component';
 import { MusicContent } from '../../models/music-content.interface';
 import { AuthService } from '../../services/auth.service';
+import { SongService, SongData } from '../../services/song.service';
+import { AlbumService, AlbumResponse } from '../../services/album.service';
 
 @Component({
   selector: 'app-browse-music',
@@ -13,53 +15,19 @@ import { AuthService } from '../../services/auth.service';
   styleUrl: './browse-music.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class BrowseMusicComponent {
+export class BrowseMusicComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly songService = inject(SongService);
+  private readonly albumService = inject(AlbumService);
   private readonly router = inject(Router);
 
-  // Mock data - in real app this would come from a service
-  private readonly mockMusicContent = signal<MusicContent[]>([
-    {
-      fileName: 'song1.mp3',
-      fileType: 'audio/mpeg',
-      fileSize: 3584000, // ~3.4 MB
-      createdAt: new Date('2024-01-15'),
-      lastModified: new Date('2024-01-15'),
-      title: 'Midnight Dreams',
-      genres: ['Jazz', 'Ambient'],
-      duration: 245, // 4:05
-      artistIds: ['John Doe', 'Jane Smith'],
-      audioFile: new File([''], 'song1.mp3', { type: 'audio/mpeg' })
-    },
-    {
-      fileName: 'rock_anthem.wav',
-      fileType: 'audio/wav',
-      fileSize: 45678000, // ~43.5 MB
-      createdAt: new Date('2024-02-10'),
-      lastModified: new Date('2024-02-12'),
-      title: 'Electric Thunder',
-      genres: ['Rock', 'Alternative'],
-      duration: 312, // 5:12
-      artistIds: ['Rock Band'],
-      albumId: 'album-123',
-      audioFile: new File([''], 'rock_anthem.wav', { type: 'audio/wav' })
-    },
-    {
-      fileName: 'classical_piece.flac',
-      fileType: 'audio/flac',
-      fileSize: 28945000, // ~27.6 MB
-      createdAt: new Date('2024-03-05'),
-      lastModified: new Date('2024-03-05'),
-      title: 'Symphony No. 1',
-      genres: ['Classical', 'Orchestral'],
-      duration: 1825, // 30:25
-      artistIds: ['Orchestra Ensemble'],
-      audioFile: new File([''], 'classical_piece.flac', { type: 'audio/flac' })
-    }
-  ]);
+  protected readonly songs = signal<SongData[]>([]);
+  protected readonly albums = signal<AlbumResponse[]>([]);
+  protected readonly loading = signal<boolean>(false);
+  protected readonly error = signal<string | null>(null);
 
-  protected readonly currentlyPlaying = signal<MusicContent | null>(null);
+  protected readonly currentlyPlaying = signal<SongData | null>(null);
   protected readonly audioElement = signal<HTMLAudioElement | null>(null);
 
   protected readonly filterForm: FormGroup = this.fb.group({
@@ -69,61 +37,89 @@ export class BrowseMusicComponent {
     fileType: ['']
   });
 
+  ngOnInit(): void {
+    this.loadSongs();
+    this.loadAlbums();
+  }
+
+  private loadSongs(): void {
+    this.loading.set(true);
+    this.songService.listSongs().subscribe({
+      next: (response) => {
+        this.songs.set(response.songs);
+        this.loading.set(false);
+      },
+      error: (error) => {
+        console.error('Error loading songs:', error);
+        this.error.set('Failed to load songs');
+        this.loading.set(false);
+      }
+    });
+  }
+
+  private loadAlbums(): void {
+    this.albumService.listAlbums().subscribe({
+      next: (response) => {
+        this.albums.set(response.albums);
+      },
+      error: (error) => {
+        console.error('Error loading albums:', error);
+      }
+    });
+  }
+
   protected readonly allGenres = computed(() => {
     const genres = new Set<string>();
-    this.mockMusicContent().forEach(content => {
-      content.genres.forEach(genre => genres.add(genre));
+    this.songs().forEach(song => {
+      song.genres.forEach(genre => genres.add(genre));
     });
     return Array.from(genres).sort();
   });
 
   protected readonly allArtists = computed(() => {
     const artists = new Set<string>();
-    this.mockMusicContent().forEach(content => {
-      content.artistIds.forEach(artist => artists.add(artist));
+    this.songs().forEach(song => {
+      song.artistIds.forEach(artistId => artists.add(artistId));
     });
     return Array.from(artists).sort();
   });
 
   protected readonly fileTypes = computed(() => {
     const types = new Set<string>();
-    this.mockMusicContent().forEach(content => {
-      types.add(content.fileType);
+    this.songs().forEach(song => {
+      types.add(song.fileType);
     });
     return Array.from(types).sort();
   });
 
   protected readonly filteredContent = computed(() => {
-    const content = this.mockMusicContent();
+    const content = this.songs();
     const filters = this.filterForm.value;
 
-    return content.filter(item => {
+    return content.filter(song => {
       // Search term filter
       if (filters.searchTerm) {
         const searchLower = filters.searchTerm.toLowerCase();
-        const matchesTitle = item.title.toLowerCase().includes(searchLower);
-        const matchesArtist = item.artistIds.some(artist =>
-          artist.toLowerCase().includes(searchLower)
-        );
-        const matchesFileName = item.fileName.toLowerCase().includes(searchLower);
+        const matchesTitle = song.title.toLowerCase().includes(searchLower);
+        const matchesFileName = song.fileName.toLowerCase().includes(searchLower);
 
-        if (!matchesTitle && !matchesArtist && !matchesFileName) {
+        if (!matchesTitle && !matchesFileName) {
           return false;
         }
       }
 
       // Genre filter
-      if (filters.selectedGenre && !item.genres.includes(filters.selectedGenre)) {
+      if (filters.selectedGenre && !song.genres.includes(filters.selectedGenre)) {
         return false;
       }
 
       // Artist filter
-      if (filters.selectedArtist && !item.artistIds.includes(filters.selectedArtist)) {
+      if (filters.selectedArtist && !song.artistIds.includes(filters.selectedArtist)) {
         return false;
       }
 
       // File type filter
-      if (filters.fileType && item.fileType !== filters.fileType) {
+      if (filters.fileType && song.fileType !== filters.fileType) {
         return false;
       }
 
@@ -136,7 +132,7 @@ export class BrowseMusicComponent {
   protected readonly currentUser = this.authService.currentUser;
   protected readonly isAdmin = computed(() => this.authService.isAdmin());
 
-  protected onPlayTrack(content: MusicContent): void {
+  protected async onPlayTrack(song: SongData): Promise<void> {
     // Stop current audio if playing
     const currentAudio = this.audioElement();
     if (currentAudio) {
@@ -144,33 +140,46 @@ export class BrowseMusicComponent {
       currentAudio.currentTime = 0;
     }
 
-    // Create new audio element
-    const audioUrl = URL.createObjectURL(content.audioFile);
-    const audio = new Audio(audioUrl);
+    try {
+      // Get presigned URL from S3
+      const audioUrl = await this.getAudioUrl(song.fileUrl);
 
-    audio.addEventListener('loadedmetadata', () => {
-      console.log(`Playing: ${content.title} - Duration: ${audio.duration}s`);
-    });
+      // Create new audio element
+      const audio = new Audio(audioUrl);
 
-    audio.addEventListener('ended', () => {
-      this.currentlyPlaying.set(null);
-      this.audioElement.set(null);
-    });
+      audio.addEventListener('loadedmetadata', () => {
+        console.log(`Playing: ${song.title} - Duration: ${audio.duration}s`);
+      });
 
-    audio.addEventListener('error', (e) => {
-      console.error('Audio playback error:', e);
-      this.currentlyPlaying.set(null);
-      this.audioElement.set(null);
-    });
+      audio.addEventListener('ended', () => {
+        this.currentlyPlaying.set(null);
+        this.audioElement.set(null);
+      });
 
-    this.audioElement.set(audio);
-    this.currentlyPlaying.set(content);
+      audio.addEventListener('error', (e) => {
+        console.error('Audio playback error:', e);
+        this.error.set('Failed to play audio');
+        this.currentlyPlaying.set(null);
+        this.audioElement.set(null);
+      });
 
-    audio.play().catch(err => {
+      this.audioElement.set(audio);
+      this.currentlyPlaying.set(song);
+
+      await audio.play();
+    } catch (err) {
       console.error('Failed to play audio:', err);
+      this.error.set('Failed to load audio file');
       this.currentlyPlaying.set(null);
       this.audioElement.set(null);
-    });
+    }
+  }
+
+  private async getAudioUrl(s3Url: string): Promise<string> {
+    // TODO: Implement presigned URL generation or use direct S3 URL
+    // For now, return the S3 URL directly (requires proper CORS and permissions)
+    // In production, you should generate a presigned URL from backend
+    return s3Url.replace('s3://', 'https://');
   }
 
   protected stopPlayback(): void {

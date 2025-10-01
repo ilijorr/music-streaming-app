@@ -121,6 +121,20 @@ export class SongService {
   }
 
   /**
+   * List all songs
+   */
+  listSongs(): Observable<{ songs: SongData[], count: number }> {
+    return this.http.get<{ songs: SongData[], count: number }>(`${this.apiUrl}songs`);
+  }
+
+  /**
+   * Get a specific song by ID
+   */
+  getSong(id: string): Observable<{ song: SongData }> {
+    return this.http.get<{ song: SongData }>(`${this.apiUrl}songs/${id}`);
+  }
+
+  /**
    * Get audio duration from file
    */
   async getAudioDuration(file: File): Promise<number> {

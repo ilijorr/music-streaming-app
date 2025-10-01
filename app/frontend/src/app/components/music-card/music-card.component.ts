@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, input, output, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MusicContent } from '../../models/music-content.interface';
+import { SongData } from '../../services/song.service';
 
 @Component({
   selector: 'app-music-card',
@@ -10,13 +10,13 @@ import { MusicContent } from '../../models/music-content.interface';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MusicCardComponent {
-  readonly content = input.required<MusicContent>();
-  readonly onPlay = output<MusicContent>();
+  readonly content = input.required<SongData>();
+  readonly onPlay = output<SongData>();
 
   protected readonly isPlaying = signal(false);
   protected readonly coverImageUrl = computed(() => {
     const content = this.content();
-    return content.coverImage ? URL.createObjectURL(content.coverImage) : null;
+    return content.coverUrl || null;
   });
 
   protected readonly fileSizeInMB = computed(() => {
@@ -36,13 +36,14 @@ export class MusicCardComponent {
     this.onPlay.emit(this.content());
   }
 
-  protected formatDate(date: Date): string {
+  protected formatDate(date: string | Date): string {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(dateObj);
   }
 }

@@ -101,9 +101,9 @@
   <!-- Music Content List -->
   <div class="content-list">
     @if (filteredContent().length > 0) {
-      @for (content of filteredContent(); track content.fileName) {
+      @for (song of filteredContent(); track song.songId) {
         <app-music-card
-          [content]="content"
+          [content]="song"
           (onPlay)="onPlayTrack($event)"
         />
       }
