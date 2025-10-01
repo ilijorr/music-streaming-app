@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Amplify } from 'aws-amplify';
 import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resendSignUpCode, fetchUserAttributes } from '@aws-amplify/auth';
+import { fetchAuthSession } from '@aws-amplify/auth';
 import { ConfigService } from './config.service';
 
 export interface User {
@@ -10,6 +11,7 @@ export interface User {
   givenName?: string;
   familyName?: string;
   birthdate?: string;
+  groups?: string[];
 }
 
 export interface SignUpData {
@@ -63,6 +65,10 @@ export class AuthService {
       this.isLoading.set(true);
       const user = await getCurrentUser();
       const attributes = await fetchUserAttributes();
+      const session = await fetchAuthSession();
+
+      // Extract groups from JWT token
+      const groups = this.extractGroupsFromToken(session);
 
       this.currentUser.set({
         userId: user.userId,
@@ -70,17 +76,28 @@ export class AuthService {
         email: attributes.email,
         givenName: attributes.given_name,
         familyName: attributes.family_name,
-        birthdate: attributes.birthdate
+        birthdate: attributes.birthdate,
+        groups: groups
       });
       this.isAuthenticated.set(true);
 
-      console.log('User is authenticated:', user, 'Attributes:', attributes);
+      console.log('User is authenticated:', user, 'Attributes:', attributes, 'Groups:', groups);
     } catch (error) {
       console.log('User is not authenticated');
       this.isAuthenticated.set(false);
       this.currentUser.set(null);
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  private extractGroupsFromToken(session: any): string[] {
+    try {
+      const accessToken = session.tokens?.accessToken?.payload;
+      return accessToken?.['cognito:groups'] || [];
+    } catch (error) {
+      console.warn('Could not extract groups from token:', error);
+      return [];
     }
   }
 
@@ -175,5 +192,14 @@ export class AuthService {
     } catch (error) {
       return null;
     }
+  }
+
+  isUserInGroup(groupName: string): boolean {
+    const user = this.currentUser();
+    return user?.groups?.includes(groupName) || false;
+  }
+
+  isAdmin(): boolean {
+    return this.isUserInGroup('Admins');
   }
 }

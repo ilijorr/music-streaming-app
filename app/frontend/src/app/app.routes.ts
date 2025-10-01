@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from './guards/auth.guard';
+import { adminGuard } from './guards/admin.guard';
 
 export const routes: Routes = [
   // Auth routes (accessible only when not authenticated)
@@ -23,7 +24,7 @@ export const routes: Routes = [
   {
     path: 'music/upload',
     loadComponent: () => import('./components/upload-music/upload-music.component').then(m => m.UploadMusicComponent),
-    canActivate: [authGuard]
+    canActivate: [adminGuard]
   },
   {
     path: 'music/browse',
