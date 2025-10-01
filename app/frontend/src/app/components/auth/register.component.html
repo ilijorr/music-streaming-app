@@ -1,0 +1,239 @@
+<div class="auth-container">
+  <div class="auth-card">
+    @if (!showConfirmation()) {
+      <!-- Registration Form -->
+      <h1>Create Account</h1>
+      <p class="auth-subtitle">Join Music Streaming App today</p>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+        <!-- Username -->
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            formControlName="username"
+            class="form-control"
+            [class.error]="registerForm.get('username')?.invalid && registerForm.get('username')?.touched"
+            placeholder="Choose a username"
+          />
+          @if (registerForm.get('username')?.invalid && registerForm.get('username')?.touched) {
+            <div class="error-message">
+              @if (registerForm.get('username')?.errors?.['required']) {
+                Username is required
+              }
+              @if (registerForm.get('username')?.errors?.['minlength']) {
+                Username must be at least 3 characters long
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            formControlName="email"
+            class="form-control"
+            [class.error]="registerForm.get('email')?.invalid && registerForm.get('email')?.touched"
+            placeholder="Enter your email"
+          />
+          @if (registerForm.get('email')?.invalid && registerForm.get('email')?.touched) {
+            <div class="error-message">
+              @if (registerForm.get('email')?.errors?.['required']) {
+                Email is required
+              }
+              @if (registerForm.get('email')?.errors?.['email']) {
+                Please enter a valid email address
+              }
+            </div>
+          }
+        </div>
+
+        <!-- First Name -->
+        <div class="form-group">
+          <label for="givenName">First Name</label>
+          <input
+            id="givenName"
+            type="text"
+            formControlName="givenName"
+            class="form-control"
+            [class.error]="registerForm.get('givenName')?.invalid && registerForm.get('givenName')?.touched"
+            placeholder="Enter your first name"
+          />
+          @if (registerForm.get('givenName')?.invalid && registerForm.get('givenName')?.touched) {
+            <div class="error-message">First name is required</div>
+          }
+        </div>
+
+        <!-- Last Name -->
+        <div class="form-group">
+          <label for="familyName">Last Name</label>
+          <input
+            id="familyName"
+            type="text"
+            formControlName="familyName"
+            class="form-control"
+            [class.error]="registerForm.get('familyName')?.invalid && registerForm.get('familyName')?.touched"
+            placeholder="Enter your last name"
+          />
+          @if (registerForm.get('familyName')?.invalid && registerForm.get('familyName')?.touched) {
+            <div class="error-message">Last name is required</div>
+          }
+        </div>
+
+        <!-- Birth Date -->
+        <div class="form-group">
+          <label for="birthdate">Birth Date</label>
+          <input
+            id="birthdate"
+            type="date"
+            formControlName="birthdate"
+            class="form-control"
+            [class.error]="registerForm.get('birthdate')?.invalid && registerForm.get('birthdate')?.touched"
+          />
+          @if (registerForm.get('birthdate')?.invalid && registerForm.get('birthdate')?.touched) {
+            <div class="error-message">Birth date is required</div>
+          }
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            formControlName="password"
+            class="form-control"
+            [class.error]="registerForm.get('password')?.invalid && registerForm.get('password')?.touched"
+            placeholder="Create a password"
+          />
+          @if (registerForm.get('password')?.invalid && registerForm.get('password')?.touched) {
+            <div class="error-message">
+              @if (registerForm.get('password')?.errors?.['required']) {
+                Password is required
+              }
+              @if (registerForm.get('password')?.errors?.['minlength']) {
+                Password must be at least 8 characters long
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Confirm Password -->
+        <div class="form-group">
+          <label for="confirmPassword">Confirm Password</label>
+          <input
+            id="confirmPassword"
+            type="password"
+            formControlName="confirmPassword"
+            class="form-control"
+            [class.error]="registerForm.get('confirmPassword')?.invalid && registerForm.get('confirmPassword')?.touched"
+            placeholder="Confirm your password"
+          />
+          @if (registerForm.get('confirmPassword')?.invalid && registerForm.get('confirmPassword')?.touched) {
+            <div class="error-message">Please confirm your password</div>
+          }
+        </div>
+
+        <!-- Error/Success Messages -->
+        @if (errorMessage()) {
+          <div class="alert alert-error">
+            {{ errorMessage() }}
+          </div>
+        }
+
+        @if (successMessage()) {
+          <div class="alert alert-success">
+            {{ successMessage() }}
+          </div>
+        }
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          class="btn btn-primary btn-full"
+          [disabled]="registerForm.invalid || isLoading()"
+        >
+          @if (isLoading()) {
+            <span class="loading-spinner"></span>
+            Creating Account...
+          } @else {
+            Create Account
+          }
+        </button>
+      </form>
+    } @else {
+      <!-- Email Confirmation Form -->
+      <h1>Confirm Your Email</h1>
+      <p class="auth-subtitle">We sent a confirmation code to your email</p>
+
+      <form [formGroup]="confirmationForm" (ngSubmit)="onConfirmation()">
+        <!-- Confirmation Code -->
+        <div class="form-group">
+          <label for="confirmationCode">Confirmation Code</label>
+          <input
+            id="confirmationCode"
+            type="text"
+            formControlName="confirmationCode"
+            class="form-control code-input"
+            [class.error]="confirmationForm.get('confirmationCode')?.invalid && confirmationForm.get('confirmationCode')?.touched"
+            placeholder="Enter 6-digit code"
+            maxlength="6"
+          />
+          @if (confirmationForm.get('confirmationCode')?.invalid && confirmationForm.get('confirmationCode')?.touched) {
+            <div class="error-message">Please enter a valid 6-digit confirmation code</div>
+          }
+        </div>
+
+        <!-- Error/Success Messages -->
+        @if (errorMessage()) {
+          <div class="alert alert-error">
+            {{ errorMessage() }}
+          </div>
+        }
+
+        @if (successMessage()) {
+          <div class="alert alert-success">
+            {{ successMessage() }}
+          </div>
+        }
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          class="btn btn-primary btn-full"
+          [disabled]="confirmationForm.invalid || isLoading()"
+        >
+          @if (isLoading()) {
+            <span class="loading-spinner"></span>
+            Confirming...
+          } @else {
+            Confirm Email
+          }
+        </button>
+
+        <!-- Resend Code -->
+        <button
+          type="button"
+          class="btn btn-secondary btn-full"
+          (click)="resendCode()"
+          [disabled]="isLoading()"
+        >
+          Resend Code
+        </button>
+      </form>
+    }
+
+    <!-- Login Link -->
+    <div class="auth-footer">
+      <p>Already have an account?
+        <button type="button" class="link-button" (click)="navigateToLogin()">
+          Sign in here
+        </button>
+      </p>
+    </div>
+  </div>
+</div>
