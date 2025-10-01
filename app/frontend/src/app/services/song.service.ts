@@ -135,6 +135,13 @@ export class SongService {
   }
 
   /**
+   * Get presigned download URL for a song
+   */
+  getDownloadUrl(id: string): Observable<{ downloadUrl: string, expiresIn: number }> {
+    return this.http.get<{ downloadUrl: string, expiresIn: number }>(`${this.apiUrl}songs/${id}/download-url`);
+  }
+
+  /**
    * Get audio duration from file
    */
   async getAudioDuration(file: File): Promise<number> {

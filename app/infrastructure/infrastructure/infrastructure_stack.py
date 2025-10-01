@@ -268,6 +268,14 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        get_download_url_fn = _lambda.Function(
+            self, "GetDownloadUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_download_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
         # ALBUMS FUNCTIONS
         create_album_fn = _lambda.Function(
             self, "CreateAlbumFunction",
@@ -383,6 +391,15 @@ class InfrastructureStack(Stack):
         song_id.add_method(
             "GET",
             apigateway.LambdaIntegration(get_song_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/{id}/download-url
+        download_url = song_id.add_resource("download-url")
+        download_url.add_method(
+            "GET",
+            apigateway.LambdaIntegration(get_download_url_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )

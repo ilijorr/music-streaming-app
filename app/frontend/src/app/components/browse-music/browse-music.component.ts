@@ -140,15 +140,23 @@ export class BrowseMusicComponent implements OnInit {
       currentAudio.currentTime = 0;
     }
 
-    try {
-      // Get presigned URL from S3
-      const audioUrl = await this.getAudioUrl(song.fileUrl);
+    this.loading.set(true);
+    this.error.set(null);
 
-      // Create new audio element
-      const audio = new Audio(audioUrl);
+    try {
+      // Get presigned download URL from backend
+      const urlResponse = await this.songService.getDownloadUrl(song.songId).toPromise();
+
+      if (!urlResponse) {
+        throw new Error('Failed to get download URL');
+      }
+
+      // Create new audio element with presigned URL
+      const audio = new Audio(urlResponse.downloadUrl);
 
       audio.addEventListener('loadedmetadata', () => {
         console.log(`Playing: ${song.title} - Duration: ${audio.duration}s`);
+        this.loading.set(false);
       });
 
       audio.addEventListener('ended', () => {
@@ -161,6 +169,7 @@ export class BrowseMusicComponent implements OnInit {
         this.error.set('Failed to play audio');
         this.currentlyPlaying.set(null);
         this.audioElement.set(null);
+        this.loading.set(false);
       });
 
       this.audioElement.set(audio);
@@ -172,14 +181,8 @@ export class BrowseMusicComponent implements OnInit {
       this.error.set('Failed to load audio file');
       this.currentlyPlaying.set(null);
       this.audioElement.set(null);
+      this.loading.set(false);
     }
-  }
-
-  private async getAudioUrl(s3Url: string): Promise<string> {
-    // TODO: Implement presigned URL generation or use direct S3 URL
-    // For now, return the S3 URL directly (requires proper CORS and permissions)
-    // In production, you should generate a presigned URL from backend
-    return s3Url.replace('s3://', 'https://');
   }
 
   protected stopPlayback(): void {
