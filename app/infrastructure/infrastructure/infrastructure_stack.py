@@ -51,6 +51,36 @@ class InfrastructureStack(Stack):
             versioned=False
         )
 
+        # Bucket policy to allow only specific audio file types
+        music_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="DenyNonAudioFiles",
+                effect=iam.Effect.DENY,
+                principals=[iam.AnyPrincipal()],
+                actions=["s3:PutObject"],
+                resources=[f"{music_bucket.bucket_arn}/*"],
+                conditions={
+                    "StringNotLike": {
+                        "s3:x-amz-server-side-encryption-customer-algorithm": [
+                            "audio/mpeg",      # .mp3
+                            "audio/mp3",       # .mp3 (alternative)
+                            "audio/wav",       # .wav
+                            "audio/wave",      # .wav (alternative)
+                            "audio/x-wav",     # .wav (alternative)
+                            "audio/flac",      # .flac
+                            "audio/x-flac",    # .flac (alternative)
+                            "audio/mp4",       # .m4a
+                            "audio/x-m4a",     # .m4a
+                            "audio/ogg",       # .ogg
+                            "audio/vorbis",    # .ogg (alternative)
+                            "audio/aac",       # .aac
+                            "audio/x-aac"      # .aac (alternative)
+                        ]
+                    }
+                }
+            )
+        )
+
         # ======================
         # DYNAMODB TABLE
         # ======================

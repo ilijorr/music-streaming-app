@@ -24,13 +24,31 @@ echo "CDK deployment successful!"
 
 echo "Generating Angular config file..."
 
-# Get the API URL from CloudFormation outputs
+# Get CloudFormation outputs
 API_URL=$(aws cloudformation describe-stacks \
     --stack-name InfrastructureStack \
     --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
     --output text)
 
+USER_POOL_ID=$(aws cloudformation describe-stacks \
+    --stack-name InfrastructureStack \
+    --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolId'].OutputValue" \
+    --output text)
+
+USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+    --stack-name InfrastructureStack \
+    --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientId'].OutputValue" \
+    --output text)
+
+BUCKET_NAME=$(aws cloudformation describe-stacks \
+    --stack-name InfrastructureStack \
+    --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+    --output text)
+
 echo "API URL: $API_URL"
+echo "User Pool ID: $USER_POOL_ID"
+echo "User Pool Client ID: $USER_POOL_CLIENT_ID"
+echo "S3 Bucket Name: $BUCKET_NAME"
 
 # Define the frontend config path
 FRONTEND_CONFIG_PATH="../frontend/src/assets/config.json"
@@ -41,7 +59,39 @@ mkdir -p "$(dirname "$FRONTEND_CONFIG_PATH")"
 # Create the config file
 cat > "$FRONTEND_CONFIG_PATH" << EOF
 {
-  "apiUrl": "$API_URL"
+  "apiUrl": "$API_URL",
+  "cognito": {
+    "userPoolId": "$USER_POOL_ID",
+    "userPoolClientId": "$USER_POOL_CLIENT_ID",
+    "region": "$(echo $USER_POOL_ID | cut -d'_' -f1)"
+  },
+  "s3": {
+    "bucketName": "$BUCKET_NAME",
+    "region": "$(echo $USER_POOL_ID | cut -d'_' -f1)"
+  },
+  "allowedAudioFormats": [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/wave",
+    "audio/x-wav",
+    "audio/flac",
+    "audio/x-flac",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/ogg",
+    "audio/vorbis",
+    "audio/aac",
+    "audio/x-aac"
+  ],
+  "allowedAudioExtensions": [
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".m4a",
+    ".ogg",
+    ".aac"
+  ]
 }
 EOF
 
