@@ -51,60 +51,9 @@ class InfrastructureStack(Stack):
             versioned=False
         )
 
-        # Bucket policy to allow only specific file types in songs folder
-        # Allow audio files in songs/ folder only
-        music_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="DenyNonAudioFilesInSongs",
-                effect=iam.Effect.DENY,
-                principals=[iam.AnyPrincipal()],
-                actions=["s3:PutObject"],
-                resources=[f"{music_bucket.bucket_arn}/songs/*"],
-                conditions={
-                    "StringNotLike": {
-                        "s3:content-type": [
-                            "audio/mpeg",      # .mp3
-                            "audio/mp3",       # .mp3 (alternative)
-                            "audio/wav",       # .wav
-                            "audio/wave",      # .wav (alternative)
-                            "audio/x-wav",     # .wav (alternative)
-                            "audio/flac",      # .flac
-                            "audio/x-flac",    # .flac (alternative)
-                            "audio/mp4",       # .m4a
-                            "audio/x-m4a",     # .m4a
-                            "audio/ogg",       # .ogg
-                            "audio/vorbis",    # .ogg (alternative)
-                            "audio/aac",       # .aac
-                            "audio/x-aac"      # .aac (alternative)
-                        ]
-                    }
-                }
-            )
-        )
-
-        # Allow image files in artists/ and albums/ folders
-        music_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="DenyNonImageFilesInArtistsAlbums",
-                effect=iam.Effect.DENY,
-                principals=[iam.AnyPrincipal()],
-                actions=["s3:PutObject"],
-                resources=[
-                    f"{music_bucket.bucket_arn}/artists/*",
-                    f"{music_bucket.bucket_arn}/albums/*"
-                ],
-                conditions={
-                    "StringNotLike": {
-                        "s3:content-type": [
-                            "image/jpeg",
-                            "image/jpg",
-                            "image/png",
-                            "image/webp"
-                        ]
-                    }
-                }
-            )
-        )
+        # Note: File type validation is handled at the application level (Lambda)
+        # S3 bucket policies with content-type conditions are complex and can be restrictive
+        # Access control is managed through IAM roles granted to Lambda functions
 
         # ======================
         # DYNAMODB TABLE
