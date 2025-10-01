@@ -12,7 +12,7 @@ from utils import (
     parse_body,
     get_current_timestamp
 )
-from models import Song
+from models import Song, extract_file_metadata
 
 # Environment variables
 TABLE_NAME = os.environ.get('TABLE_NAME')
@@ -68,6 +68,8 @@ def lambda_handler(event, context):
         genres = body['genres']
         cover_image_base64 = body.get('coverImageBase64')
         duration = body.get('duration')
+        featuring_artists = body.get('featuringArtists', [])
+        filename = body.get('filename')  # Optional filename for metadata extraction
 
         # Additional validation
         if not isinstance(artist_ids, list) or len(artist_ids) == 0:
@@ -106,20 +108,26 @@ def lambda_handler(event, context):
         # Generate unique song ID
         song_id = str(uuid.uuid4())
 
+        # Extract file metadata
+        file_metadata = extract_file_metadata(audio_file_base64, filename)
+
         # Upload audio file to S3
         try:
-            audio_key = f"songs/{song_id}.mp3"
+            # Use appropriate extension based on file type
+            ext = '.mp3'  # default
+            if file_metadata['file_type'] == 'audio/wav':
+                ext = '.wav'
+            elif file_metadata['file_type'] == 'audio/mp4':
+                ext = '.m4a'
+
+            audio_key = f"songs/{song_id}{ext}"
             file_url = upload_to_s3(
                 bucket=BUCKET_NAME,
                 key=audio_key,
                 file_data=audio_file_base64,
-                content_type='audio/mpeg'
+                content_type=file_metadata['file_type']
             )
             print(f"Uploaded audio file to: {file_url}")
-
-            # Calculate file size
-            audio_bytes = base64.b64decode(audio_file_base64)
-            file_size = len(audio_bytes)
 
         except Exception as e:
             print(f"Failed to upload audio file: {str(e)}")
@@ -151,11 +159,15 @@ def lambda_handler(event, context):
             artist_ids=artist_ids,
             genres=genres,
             file_url=file_url,
+            file_name=file_metadata['file_name'],
+            file_type=file_metadata['file_type'],
+            file_size=file_metadata['file_size'],
+            file_created_at=file_metadata['file_created_at'],
+            file_modified_at=file_metadata['file_modified_at'],
             album_id=album_id,
             cover_url=cover_url,
             duration=duration,
-            file_size=file_size,
-            file_type='audio/mpeg'
+            featuring_artists=featuring_artists
         )
 
         # Save main metadata to DynamoDB

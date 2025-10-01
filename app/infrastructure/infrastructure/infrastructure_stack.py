@@ -293,6 +293,18 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        upload_album_fn = _lambda.Function(
+            self, "UploadAlbumFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
+            handler="upload_album.lambda_handler",
+            timeout=Duration.seconds(300),  # 5 minutes for bulk upload
+            memory_size=1024,  # More memory for processing multiple files
+            environment=lambda_environment,
+            role=lambda_role,
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            layers=[common_layer]
+        )
+
         # ======================
         # API GATEWAY
         # ======================
@@ -395,6 +407,15 @@ class InfrastructureStack(Stack):
         album_id.add_method(
             "GET",
             apigateway.LambdaIntegration(get_album_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /albums/upload - Bulk album upload
+        albums_upload = albums.add_resource("upload")
+        albums_upload.add_method(
+            "POST",
+            apigateway.LambdaIntegration(upload_album_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
