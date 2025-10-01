@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, signal, computed, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormArray } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { HttpEventType } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { MusicContent } from '../../models/music-content.interface';
@@ -8,6 +9,7 @@ import { Album } from '../../models/album.interface';
 import { ArtistResponse } from '../../models/artist.interface';
 import { SongService, CreateSongRequest } from '../../services/song.service';
 import { ArtistService } from '../../services/artist.service';
+import { AlbumService, AlbumResponse } from '../../services/album.service';
 import { getAllGenres } from '../../models/genre.enum';
 
 @Component({
@@ -21,6 +23,7 @@ export class UploadMusicComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly songService = inject(SongService);
   private readonly artistService = inject(ArtistService);
+  private readonly albumService = inject(AlbumService);
   private readonly router = inject(Router);
 
   protected readonly uploadType = signal<'single' | 'album'>('single');
@@ -36,6 +39,7 @@ export class UploadMusicComponent implements OnInit {
   });
 
   protected readonly availableArtists = signal<ArtistResponse[]>([]);
+  protected readonly availableAlbums = signal<AlbumResponse[]>([]);
   protected readonly availableGenres = getAllGenres();
 
   // Single song form
@@ -43,7 +47,8 @@ export class UploadMusicComponent implements OnInit {
     title: ['', [Validators.required, Validators.minLength(1)]],
     genres: this.fb.array([this.fb.control('', Validators.required)]),
     selectedArtists: [[], Validators.required],
-    featuringArtists: [[]]
+    featuringArtists: [[]],
+    albumId: [''] // Optional album to attach song to
   });
 
   // Album form
@@ -57,6 +62,7 @@ export class UploadMusicComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadArtists();
+    this.loadAlbums();
   }
 
   protected get currentForm(): FormGroup {
@@ -103,6 +109,17 @@ export class UploadMusicComponent implements OnInit {
       error: (error) => {
         console.error('Error loading artists:', error);
         this.error.set('Failed to load artists. Please refresh the page.');
+      }
+    });
+  }
+
+  private loadAlbums(): void {
+    this.albumService.listAlbums().subscribe({
+      next: (response) => {
+        this.availableAlbums.set(response.albums);
+      },
+      error: (error) => {
+        console.error('Error loading albums:', error);
       }
     });
   }
@@ -163,6 +180,61 @@ export class UploadMusicComponent implements OnInit {
     }
   }
 
+  protected addSongToAlbum(): void {
+    const songGroup = this.fb.group({
+      title: ['', Validators.required],
+      audioFile: [null, Validators.required],
+      genres: this.fb.array([this.fb.control('', Validators.required)]),
+      featuringArtists: [[]]
+    });
+
+    this.albumSongs.push(songGroup);
+  }
+
+  protected removeSongFromAlbum(index: number): void {
+    this.albumSongs.removeAt(index);
+  }
+
+  protected onAlbumSongFileSelected(event: Event, songIndex: number): void {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('audio/')) {
+        this.error.set('Please select a valid audio file');
+        return;
+      }
+
+      // Validate file size (max 50MB)
+      const maxSizeInBytes = 50 * 1024 * 1024;
+      if (file.size > maxSizeInBytes) {
+        this.error.set('Audio file size must be less than 50MB');
+        return;
+      }
+
+      const songControl = this.albumSongs.at(songIndex);
+      songControl.patchValue({ audioFile: file });
+      this.error.set(null);
+    }
+  }
+
+  protected getSongGenres(songIndex: number): FormArray {
+    return this.albumSongs.at(songIndex).get('genres') as FormArray;
+  }
+
+  protected addGenreToSong(songIndex: number): void {
+    const genresArray = this.getSongGenres(songIndex);
+    genresArray.push(this.fb.control('', Validators.required));
+  }
+
+  protected removeGenreFromSong(songIndex: number, genreIndex: number): void {
+    const genresArray = this.getSongGenres(songIndex);
+    if (genresArray.length > 1) {
+      genresArray.removeAt(genreIndex);
+    }
+  }
+
   protected async onSubmit(): Promise<void> {
     if (this.uploadType() === 'single') {
       await this.submitSingle();
@@ -203,7 +275,7 @@ export class UploadMusicComponent implements OnInit {
         console.warn('Could not extract audio duration:', error);
       }
 
-      // Prepare request payload for single song (NO albumId)
+      // Prepare request payload for single song
       const request: CreateSongRequest = {
         audioFileBase64,
         title: formValue.title.trim(),
@@ -219,6 +291,11 @@ export class UploadMusicComponent implements OnInit {
       // Add optional featuring artists if provided
       if (formValue.featuringArtists && formValue.featuringArtists.length > 0) {
         request.featuringArtists = formValue.featuringArtists;
+      }
+
+      // Add optional album ID if provided
+      if (formValue.albumId && formValue.albumId.trim().length > 0) {
+        request.albumId = formValue.albumId;
       }
 
       // Call API
@@ -239,8 +316,118 @@ export class UploadMusicComponent implements OnInit {
   }
 
   private async submitAlbum(): Promise<void> {
-    // TODO: Implement album upload logic
-    this.error.set('Album upload not yet implemented');
+    if (!this.albumForm.valid || this.albumSongs.length === 0) {
+      this.error.set('Please fill in all required fields and add at least one song');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set(null);
+    this.success.set(false);
+
+    try {
+      const formValue = this.albumForm.value;
+      const coverImage = this.selectedCoverImage();
+
+      // Convert cover image to base64 if present
+      let coverImageBase64: string | undefined;
+      if (coverImage) {
+        coverImageBase64 = await this.albumService.fileToBase64(coverImage);
+      }
+
+      // Step 1: Create the album
+      const albumRequest = {
+        title: formValue.title.trim(),
+        artistIds: formValue.artistIds,
+        releaseDate: formValue.releaseDate,
+        genres: formValue.genres
+          .map((genre: string) => genre.trim())
+          .filter((genre: string) => genre.length > 0),
+        coverImageBase64
+      };
+
+      this.albumService.createAlbum(albumRequest).subscribe({
+        next: async (albumResponse) => {
+          console.log('Album created successfully:', albumResponse);
+          const albumId = albumResponse.album.albumId;
+
+          // Step 2: Upload each song with the albumId
+          const songUploads: Promise<void>[] = [];
+
+          for (let i = 0; i < this.albumSongs.length; i++) {
+            const songData = this.albumSongs.at(i).value;
+            const songFile = songData.audioFile as File;
+
+            const songUploadPromise = new Promise<void>(async (resolve, reject) => {
+              try {
+                // Convert audio to base64
+                const audioFileBase64 = await this.songService.fileToBase64(songFile);
+
+                // Get duration
+                let duration: number | undefined;
+                try {
+                  duration = await this.songService.getAudioDuration(songFile);
+                } catch (error) {
+                  console.warn(`Could not extract audio duration for ${songFile.name}:`, error);
+                }
+
+                // Prepare song request
+                const songRequest: CreateSongRequest = {
+                  audioFileBase64,
+                  title: songData.title.trim(),
+                  artistIds: formValue.artistIds,
+                  genres: songData.genres
+                    .map((genre: string) => genre.trim())
+                    .filter((genre: string) => genre.length > 0),
+                  filename: songFile.name,
+                  duration,
+                  albumId: albumId
+                };
+
+                // Add featuring artists if provided
+                if (songData.featuringArtists && songData.featuringArtists.length > 0) {
+                  songRequest.featuringArtists = songData.featuringArtists;
+                }
+
+                // Upload song
+                this.songService.createSong(songRequest).subscribe({
+                  next: () => {
+                    console.log(`Song ${i + 1}/${this.albumSongs.length} uploaded successfully`);
+                    resolve();
+                  },
+                  error: (err) => {
+                    console.error(`Error uploading song ${songFile.name}:`, err);
+                    reject(err);
+                  }
+                });
+              } catch (err) {
+                reject(err);
+              }
+            });
+
+            songUploads.push(songUploadPromise);
+          }
+
+          // Wait for all songs to upload
+          try {
+            await Promise.all(songUploads);
+            console.log('All songs uploaded successfully');
+            this.handleUploadSuccess();
+          } catch (err) {
+            console.error('Error uploading songs:', err);
+            this.loading.set(false);
+            this.error.set('Album created but some songs failed to upload. Please try again.');
+          }
+        },
+        error: (err) => {
+          this.handleUploadError(err);
+        }
+      });
+    } catch (err) {
+      console.error('Error processing album:', err);
+      this.loading.set(false);
+      this.error.set('Failed to process album. Please try again.');
+    }
   }
 
   private handleUploadSuccess(): void {

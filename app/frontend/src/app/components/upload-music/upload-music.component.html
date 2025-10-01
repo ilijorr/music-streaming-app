@@ -120,6 +120,22 @@
           <small class="form-hint">Select artists who are featured on this track</small>
         </div>
 
+        <!-- Album Selection (Optional) -->
+        <div class="form-group">
+          <label for="albumId">Album (Optional)</label>
+          <select
+            id="albumId"
+            formControlName="albumId"
+            class="form-control"
+          >
+            <option value="">No album (Single)</option>
+            @for (album of availableAlbums(); track album.albumId) {
+              <option [value]="album.albumId">{{ album.title }}</option>
+            }
+          </select>
+          <small class="form-hint">Optionally attach this song to an existing album</small>
+        </div>
+
         <!-- Genres -->
         <div class="form-group">
           <label>Genres *</label>
@@ -173,17 +189,216 @@
       <h2>Album Upload</h2>
       <p class="description">Upload multiple songs as a complete album</p>
 
-      <div class="album-coming-soon">
-        <h3>Coming Soon</h3>
-        <p>Album upload functionality will be implemented soon. For now, use the single song upload to add individual tracks.</p>
-        <button
-          type="button"
-          class="btn btn-secondary"
-          (click)="setUploadType('single')"
-        >
-          Upload Single Songs Instead
-        </button>
-      </div>
+      <form [formGroup]="albumForm" (ngSubmit)="onSubmit()">
+        <!-- Album Title -->
+        <div class="form-group">
+          <label for="albumTitle">Album Title *</label>
+          <input
+            id="albumTitle"
+            type="text"
+            formControlName="title"
+            class="form-control"
+            [class.error]="albumForm.get('title')?.invalid && albumForm.get('title')?.touched"
+            placeholder="Enter album title"
+          />
+          @if (albumForm.get('title')?.invalid && albumForm.get('title')?.touched) {
+            <div class="error-message">Album title is required</div>
+          }
+        </div>
+
+        <!-- Album Artists -->
+        <div class="form-group">
+          <label for="albumArtists">Album Artists *</label>
+          <select
+            id="albumArtists"
+            formControlName="artistIds"
+            class="form-control"
+            multiple
+            [class.error]="albumForm.get('artistIds')?.invalid && albumForm.get('artistIds')?.touched"
+          >
+            @for (artist of availableArtists(); track artist.artistId) {
+              <option [value]="artist.artistId">{{ artist.name }}</option>
+            }
+          </select>
+          @if (albumForm.get('artistIds')?.invalid && albumForm.get('artistIds')?.touched) {
+            <div class="error-message">Please select at least one artist</div>
+          }
+          <small class="form-hint">Hold Ctrl/Cmd to select multiple artists</small>
+        </div>
+
+        <!-- Release Date -->
+        <div class="form-group">
+          <label for="releaseDate">Release Date *</label>
+          <input
+            id="releaseDate"
+            type="date"
+            formControlName="releaseDate"
+            class="form-control"
+            [class.error]="albumForm.get('releaseDate')?.invalid && albumForm.get('releaseDate')?.touched"
+          />
+          @if (albumForm.get('releaseDate')?.invalid && albumForm.get('releaseDate')?.touched) {
+            <div class="error-message">Release date is required</div>
+          }
+        </div>
+
+        <!-- Album Cover Image -->
+        <div class="form-group">
+          <label for="albumCoverImage">Album Cover Image (Optional)</label>
+          <input
+            id="albumCoverImage"
+            type="file"
+            accept="image/*"
+            class="form-control"
+            (change)="onCoverImageSelected($event)"
+          />
+          @if (coverImagePreview()) {
+            <div class="image-preview">
+              <img [src]="coverImagePreview()" alt="Album cover preview" />
+            </div>
+          }
+        </div>
+
+        <!-- Album Genres -->
+        <div class="form-group">
+          <label>Album Genres *</label>
+          <div formArrayName="genres">
+            @for (genre of genres.controls; track $index) {
+              <div class="genre-input">
+                <select
+                  [formControlName]="$index"
+                  class="form-control"
+                  [class.error]="genre.invalid && genre.touched"
+                >
+                  <option value="">Select a genre</option>
+                  @for (availableGenre of availableGenres; track availableGenre) {
+                    <option [value]="availableGenre">{{ availableGenre }}</option>
+                  }
+                </select>
+                @if (genres.length > 1) {
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    (click)="removeGenre($index)"
+                  >
+                    Remove
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          <button type="button" class="btn btn-secondary" (click)="addGenre()">
+            Add Genre
+          </button>
+        </div>
+
+        <!-- Album Songs -->
+        <div class="form-group">
+          <label>Songs *</label>
+          <div formArrayName="songs">
+            @for (song of albumSongs.controls; track $index) {
+              <div class="song-item">
+                <h4>Song {{ $index + 1 }}</h4>
+                <div [formGroupName]="$index">
+                  <!-- Song Title -->
+                  <div class="form-group">
+                    <label>Song Title *</label>
+                    <input
+                      type="text"
+                      formControlName="title"
+                      class="form-control"
+                      placeholder="Enter song title"
+                    />
+                  </div>
+
+                  <!-- Song Audio File -->
+                  <div class="form-group">
+                    <label>Audio File *</label>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      class="form-control"
+                      (change)="onAlbumSongFileSelected($event, $index)"
+                    />
+                    @if (song.get('audioFile')?.value) {
+                      <div class="file-info">
+                        <strong>Selected:</strong> {{ song.get('audioFile')?.value.name }}
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Song Genres -->
+                  <div class="form-group">
+                    <label>Song Genres *</label>
+                    <div formArrayName="genres">
+                      @for (songGenre of getSongGenres($index).controls; track genreIdx; let genreIdx = $index) {
+                        <div class="genre-input">
+                          <select
+                            [formControlName]="genreIdx"
+                            class="form-control"
+                          >
+                            <option value="">Select a genre</option>
+                            @for (availableGenre of availableGenres; track availableGenre) {
+                              <option [value]="availableGenre">{{ availableGenre }}</option>
+                            }
+                          </select>
+                          @if (getSongGenres($index).length > 1) {
+                            <button
+                              type="button"
+                              class="btn btn-danger btn-sm"
+                              (click)="removeGenreFromSong($index, genreIdx)"
+                            >
+                              Remove
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="addGenreToSong($index)">
+                      Add Genre
+                    </button>
+                  </div>
+
+                  <!-- Featuring Artists -->
+                  <div class="form-group">
+                    <label>Featuring Artists (Optional)</label>
+                    <select
+                      formControlName="featuringArtists"
+                      class="form-control"
+                      multiple
+                    >
+                      @for (artist of availableArtists(); track artist.artistId) {
+                        <option [value]="artist.artistId">{{ artist.name }}</option>
+                      }
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    (click)="removeSongFromAlbum($index)"
+                  >
+                    Remove Song
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+          <button type="button" class="btn btn-secondary" (click)="addSongToAlbum()">
+            Add Song
+          </button>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="albumForm.invalid || albumSongs.length === 0 || loading()"
+          >
+            {{ loading() ? 'Uploading Album...' : 'Upload Album' }}
+          </button>
+        </div>
+      </form>
     </div>
   }
 
