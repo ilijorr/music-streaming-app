@@ -4,6 +4,17 @@ import { firstValueFrom } from 'rxjs';
 
 export interface AppConfig {
   apiUrl: string;
+  cognito: {
+    userPoolId: string;
+    userPoolClientId: string;
+    region: string;
+  };
+  s3: {
+    bucketName: string;
+    region: string;
+  };
+  allowedAudioFormats: string[];
+  allowedAudioExtensions: string[];
 }
 
 @Injectable({
@@ -20,8 +31,7 @@ export class ConfigService {
       );
       console.log('Config loaded successfully:', this.config);
     } catch (error) {
-      console.error('Failed to load config:', error);
-      throw error;
+      console.error('Failed to load config.json!', error);
     }
   }
 
@@ -34,5 +44,21 @@ export class ConfigService {
 
   getApiUrl(): string {
     return this.get().apiUrl;
+  }
+
+  getCognitoConfig() {
+    return this.get().cognito;
+  }
+
+  getS3Config() {
+    return this.get().s3;
+  }
+
+  getAllowedAudioFormats(): string[] {
+    return this.get().allowedAudioFormats;
+  }
+
+  getAllowedAudioExtensions(): string[] {
+    return this.get().allowedAudioExtensions;
   }
 }
