@@ -1,12 +1,15 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Amplify } from 'aws-amplify';
-import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resendSignUpCode, SignInInput, SignUpInput } from '@aws-amplify/auth';
+import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resendSignUpCode, fetchUserAttributes } from '@aws-amplify/auth';
 import { ConfigService } from './config.service';
 
 export interface User {
   userId: string;
   username: string;
   email?: string;
+  givenName?: string;
+  familyName?: string;
+  birthdate?: string;
 }
 
 export interface SignUpData {
@@ -59,15 +62,19 @@ export class AuthService {
     try {
       this.isLoading.set(true);
       const user = await getCurrentUser();
+      const attributes = await fetchUserAttributes();
 
       this.currentUser.set({
         userId: user.userId,
         username: user.username,
-        email: user.signInDetails?.loginId
+        email: attributes.email,
+        givenName: attributes.given_name,
+        familyName: attributes.family_name,
+        birthdate: attributes.birthdate
       });
       this.isAuthenticated.set(true);
 
-      console.log('User is authenticated:', user);
+      console.log('User is authenticated:', user, 'Attributes:', attributes);
     } catch (error) {
       console.log('User is not authenticated');
       this.isAuthenticated.set(false);
