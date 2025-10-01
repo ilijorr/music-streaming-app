@@ -199,4 +199,8 @@ export class BrowseMusicComponent {
   protected navigateToUpload(): void {
     this.router.navigate(['/music/upload']);
   }
+
+  protected navigateToCreateArtist(): void {
+    this.router.navigate(['/artists/create']);
+  }
 }
