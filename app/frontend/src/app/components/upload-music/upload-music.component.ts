@@ -1,10 +1,14 @@
-import { Component, ChangeDetectionStrategy, signal, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormArray } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { MusicContent } from '../../models/music-content.interface';
 import { Album } from '../../models/album.interface';
-import { Artist } from '../../models/artist.interface';
+import { ArtistResponse } from '../../models/artist.interface';
+import { SongService, CreateSongRequest } from '../../services/song.service';
+import { ArtistService } from '../../services/artist.service';
+import { getAllGenres } from '../../models/genre.enum';
 
 @Component({
   selector: 'app-upload-music',
@@ -13,178 +17,265 @@ import { Artist } from '../../models/artist.interface';
   styleUrl: './upload-music.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class UploadMusicComponent {
+export class UploadMusicComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly songService = inject(SongService);
+  private readonly artistService = inject(ArtistService);
+  private readonly router = inject(Router);
 
   protected readonly uploadType = signal<'single' | 'album'>('single');
-  protected readonly selectedAudioFiles = signal<File[]>([]);
+  protected readonly selectedAudioFile = signal<File | null>(null);
   protected readonly selectedCoverImage = signal<File | null>(null);
+  protected readonly loading = signal<boolean>(false);
+  protected readonly error = signal<string | null>(null);
+  protected readonly success = signal<boolean>(false);
+
   protected readonly coverImagePreview = computed(() => {
     const image = this.selectedCoverImage();
     return image ? URL.createObjectURL(image) : null;
   });
 
-  // Mock artists data - in real app this would come from a service
-  protected readonly availableArtists = signal<Artist[]>([
-    { name: 'Test Artist', biography: 'Bio', photo: new File([], 'test'), genres: ['Rock'] }
-  ]);
+  protected readonly availableArtists = signal<ArtistResponse[]>([]);
+  protected readonly availableGenres = getAllGenres();
 
-  protected readonly uploadForm: FormGroup = this.fb.group({
-    uploadType: ['single', Validators.required],
-    // Single track fields
-    title: [''],
-    genres: this.fb.array([this.fb.control('')]),
-    selectedArtists: [[]],
-    // Album fields
-    albumTitle: [''],
-    albumReleaseDate: [''],
-    albumGenres: this.fb.array([this.fb.control('')]),
-    albumArtists: [[]]
+  // Single song form
+  protected readonly singleForm: FormGroup = this.fb.group({
+    title: ['', [Validators.required, Validators.minLength(1)]],
+    genres: this.fb.array([this.fb.control('', Validators.required)]),
+    selectedArtists: [[], Validators.required],
+    featuringArtists: [[]]
   });
 
+  // Album form
+  protected readonly albumForm: FormGroup = this.fb.group({
+    title: ['', [Validators.required, Validators.minLength(1)]],
+    artistIds: [[], Validators.required],
+    releaseDate: ['', Validators.required],
+    genres: this.fb.array([this.fb.control('', Validators.required)]),
+    songs: this.fb.array([])
+  });
+
+  ngOnInit(): void {
+    this.loadArtists();
+  }
+
+  protected get currentForm(): FormGroup {
+    return this.uploadType() === 'single' ? this.singleForm : this.albumForm;
+  }
+
   protected get genres(): FormArray {
-    return this.uploadForm.get('genres') as FormArray;
+    return this.currentForm.get('genres') as FormArray;
   }
 
-  protected get albumGenres(): FormArray {
-    return this.uploadForm.get('albumGenres') as FormArray;
+  protected get albumSongs(): FormArray {
+    return this.albumForm.get('songs') as FormArray;
   }
 
-  protected onUploadTypeChange(type: 'single' | 'album'): void {
+  protected setUploadType(type: 'single' | 'album'): void {
     this.uploadType.set(type);
-    this.uploadForm.patchValue({ uploadType: type });
-    this.updateValidators();
+    this.error.set(null);
+
+    // Reset forms when switching
+    this.singleForm.reset();
+    this.albumForm.reset();
+    this.selectedAudioFile.set(null);
+    this.selectedCoverImage.set(null);
+
+    // Reset genres arrays
+    this.resetGenresArray(this.singleForm);
+    this.resetGenresArray(this.albumForm);
+
+    // Reset album songs array
+    this.albumSongs.clear();
   }
 
-  private updateValidators(): void {
-    const isAlbum = this.uploadType() === 'album';
-
-    // Single track validators
-    const titleControl = this.uploadForm.get('title');
-    const selectedArtistsControl = this.uploadForm.get('selectedArtists');
-
-    // Album validators
-    const albumTitleControl = this.uploadForm.get('albumTitle');
-    const albumReleaseDateControl = this.uploadForm.get('albumReleaseDate');
-    const albumArtistsControl = this.uploadForm.get('albumArtists');
-
-    if (isAlbum) {
-      titleControl?.clearValidators();
-      selectedArtistsControl?.clearValidators();
-
-      albumTitleControl?.setValidators([Validators.required]);
-      albumReleaseDateControl?.setValidators([Validators.required]);
-      albumArtistsControl?.setValidators([Validators.required]);
-    } else {
-      albumTitleControl?.clearValidators();
-      albumReleaseDateControl?.clearValidators();
-      albumArtistsControl?.clearValidators();
-
-      titleControl?.setValidators([Validators.required]);
-      selectedArtistsControl?.setValidators([Validators.required]);
-    }
-
-    // Update validity
-    titleControl?.updateValueAndValidity();
-    selectedArtistsControl?.updateValueAndValidity();
-    albumTitleControl?.updateValueAndValidity();
-    albumReleaseDateControl?.updateValueAndValidity();
-    albumArtistsControl?.updateValueAndValidity();
+  private resetGenresArray(form: FormGroup): void {
+    const genresArray = form.get('genres') as FormArray;
+    genresArray.clear();
+    genresArray.push(this.fb.control('', Validators.required));
   }
 
-  protected onAudioFilesSelected(event: Event): void {
+  private loadArtists(): void {
+    this.artistService.listArtists().subscribe({
+      next: (response) => {
+        this.availableArtists.set(response.artists);
+      },
+      error: (error) => {
+        console.error('Error loading artists:', error);
+        this.error.set('Failed to load artists. Please refresh the page.');
+      }
+    });
+  }
+
+  protected onAudioFileSelected(event: Event): void {
     const target = event.target as HTMLInputElement;
-    const files = Array.from(target.files || []);
+    const file = target.files?.[0];
 
-    const audioFiles = files.filter(file => file.type.startsWith('audio/'));
-    this.selectedAudioFiles.set(audioFiles);
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('audio/')) {
+        this.error.set('Please select a valid audio file');
+        return;
+      }
+
+      // Validate file size (max 50MB)
+      const maxSizeInBytes = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSizeInBytes) {
+        this.error.set('Audio file size must be less than 50MB');
+        return;
+      }
+
+      this.selectedAudioFile.set(file);
+      this.error.set(null);
+    }
   }
 
   protected onCoverImageSelected(event: Event): void {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
 
-    if (file && file.type.startsWith('image/')) {
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        this.error.set('Please select a valid image file');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSizeInBytes) {
+        this.error.set('Image size must be less than 5MB');
+        return;
+      }
+
       this.selectedCoverImage.set(file);
+      this.error.set(null);
     }
   }
 
-  protected addGenre(isAlbum: boolean = false): void {
-    const genresArray = isAlbum ? this.albumGenres : this.genres;
-    genresArray.push(this.fb.control('', Validators.required));
+  protected addGenre(): void {
+    this.genres.push(this.fb.control('', Validators.required));
   }
 
-  protected removeGenre(index: number, isAlbum: boolean = false): void {
-    const genresArray = isAlbum ? this.albumGenres : this.genres;
-    if (genresArray.length > 1) {
-      genresArray.removeAt(index);
+  protected removeGenre(index: number): void {
+    if (this.genres.length > 1) {
+      this.genres.removeAt(index);
     }
   }
 
-  protected extractFileMetadata(file: File): {
-    fileName: string;
-    fileType: string;
-    fileSize: number;
-    createdAt: Date;
-    lastModified: Date;
-  } {
-    return {
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      createdAt: new Date(), // In real app, this might come from file metadata
-      lastModified: new Date(file.lastModified)
-    };
+  protected async onSubmit(): Promise<void> {
+    if (this.uploadType() === 'single') {
+      await this.submitSingle();
+    } else {
+      await this.submitAlbum();
+    }
   }
 
-  protected onSubmit(): void {
-    if (!this.uploadForm.valid || this.selectedAudioFiles().length === 0) {
+  private async submitSingle(): Promise<void> {
+    if (!this.singleForm.valid || !this.selectedAudioFile()) {
+      this.error.set('Please fill in all required fields and select an audio file');
       return;
     }
 
-    const formValue = this.uploadForm.value;
-    const audioFiles = this.selectedAudioFiles();
+    this.loading.set(true);
+    this.error.set(null);
+    this.success.set(false);
 
-    if (this.uploadType() === 'single') {
-      // Create single track
-      const audioFile = audioFiles[0];
-      const metadata = this.extractFileMetadata(audioFile);
+    try {
+      const formValue = this.singleForm.value;
+      const audioFile = this.selectedAudioFile()!;
+      const coverImage = this.selectedCoverImage();
 
-      const musicContent: MusicContent = {
-        ...metadata,
-        title: formValue.title,
-        genres: formValue.genres.filter((g: string) => g.trim()),
-        coverImage: this.selectedCoverImage() || undefined,
+      // Convert audio file to base64
+      const audioFileBase64 = await this.songService.fileToBase64(audioFile);
+
+      // Convert cover image to base64 if present
+      let coverImageBase64: string | undefined;
+      if (coverImage) {
+        coverImageBase64 = await this.songService.fileToBase64(coverImage);
+      }
+
+      // Get audio duration
+      let duration: number | undefined;
+      try {
+        duration = await this.songService.getAudioDuration(audioFile);
+      } catch (error) {
+        console.warn('Could not extract audio duration:', error);
+      }
+
+      // Prepare request payload for single song (NO albumId)
+      const request: CreateSongRequest = {
+        audioFileBase64,
+        title: formValue.title.trim(),
         artistIds: formValue.selectedArtists,
-        audioFile: audioFile
+        genres: formValue.genres
+          .map((genre: string) => genre.trim())
+          .filter((genre: string) => genre.length > 0),
+        filename: audioFile.name,
+        coverImageBase64,
+        duration
       };
 
-      console.log('Single track to upload:', musicContent);
-    } else {
-      // Create album
-      const tracks: MusicContent[] = audioFiles.map((file, index) => {
-        const metadata = this.extractFileMetadata(file);
-        return {
-          ...metadata,
-          title: `Track ${index + 1}`, // Would be extracted from metadata or user input
-          genres: formValue.albumGenres.filter((g: string) => g.trim()),
-          artistIds: formValue.albumArtists,
-          audioFile: file
-        };
+      // Add optional featuring artists if provided
+      if (formValue.featuringArtists && formValue.featuringArtists.length > 0) {
+        request.featuringArtists = formValue.featuringArtists;
+      }
+
+      // Call API
+      this.songService.createSong(request).subscribe({
+        next: (response) => {
+          console.log('Single song uploaded successfully:', response);
+          this.handleUploadSuccess();
+        },
+        error: (err) => {
+          this.handleUploadError(err);
+        }
       });
-
-      const album: Album = {
-        title: formValue.albumTitle,
-        releaseDate: new Date(formValue.albumReleaseDate),
-        coverImage: this.selectedCoverImage() || undefined,
-        genres: formValue.albumGenres.filter((g: string) => g.trim()),
-        artistIds: formValue.albumArtists,
-        tracks: tracks
-      };
-
-      console.log('Album to upload:', album);
+    } catch (err) {
+      console.error('Error processing single song files:', err);
+      this.loading.set(false);
+      this.error.set('Failed to process files. Please try again.');
     }
+  }
 
-    // TODO: Implement upload service calls
+  private async submitAlbum(): Promise<void> {
+    // TODO: Implement album upload logic
+    this.error.set('Album upload not yet implemented');
+  }
+
+  private handleUploadSuccess(): void {
+    this.success.set(true);
+    this.loading.set(false);
+
+    // Reset forms
+    this.singleForm.reset();
+    this.albumForm.reset();
+    this.selectedAudioFile.set(null);
+    this.selectedCoverImage.set(null);
+
+    // Reset genres arrays
+    this.resetGenresArray(this.singleForm);
+    this.resetGenresArray(this.albumForm);
+
+    // Redirect to browse music after 2 seconds
+    setTimeout(() => {
+      this.router.navigate(['/music/browse']);
+    }, 2000);
+  }
+
+  private handleUploadError(err: any): void {
+    console.error('Error uploading:', err);
+    this.loading.set(false);
+
+    // Handle different error status codes
+    if (err.status === 401) {
+      this.error.set('You are not authenticated. Please log in.');
+    } else if (err.status === 403) {
+      this.error.set('Access denied. Only administrators can upload music.');
+    } else if (err.status === 400) {
+      this.error.set('Invalid input. Please check your data and try again.');
+    } else {
+      this.error.set('An error occurred while uploading. Please try again.');
+    }
   }
 }
