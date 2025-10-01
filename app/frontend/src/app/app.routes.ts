@@ -19,7 +19,7 @@ export const routes: Routes = [
   {
     path: 'artists/create',
     loadComponent: () => import('./components/create-artist/create-artist.component').then(m => m.CreateArtistComponent),
-    canActivate: [authGuard]
+    canActivate: [adminGuard]
   },
   {
     path: 'music/upload',
@@ -30,6 +30,11 @@ export const routes: Routes = [
     path: 'music/browse',
     loadComponent: () => import('./components/browse-music/browse-music.component').then(m => m.BrowseMusicComponent),
     canActivate: [authGuard]
+  },
+  {
+    path: 'browse-music',
+    redirectTo: '/music/browse',
+    pathMatch: 'full'
   },
 
   // Default redirects

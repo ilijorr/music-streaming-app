@@ -103,10 +103,32 @@
       <button
         type="submit"
         class="btn btn-primary"
-        [disabled]="artistForm.invalid || !selectedPhoto()"
+        [disabled]="artistForm.invalid || !selectedPhoto() || loading()"
       >
-        Create Artist
+        {{ loading() ? 'Creating...' : 'Create Artist' }}
       </button>
     </div>
   </form>
+
+  <!-- Loading Overlay -->
+  @if (loading()) {
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Creating artist...</p>
+    </div>
+  }
+
+  <!-- Success Alert -->
+  @if (success()) {
+    <div class="alert alert-success">
+      <strong>Success!</strong> Artist created successfully. Redirecting to browse music...
+    </div>
+  }
+
+  <!-- Error Alert -->
+  @if (error()) {
+    <div class="alert alert-error">
+      <strong>Error!</strong> {{ error() }}
+    </div>
+  }
 </div>

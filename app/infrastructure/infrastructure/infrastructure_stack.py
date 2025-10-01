@@ -51,17 +51,18 @@ class InfrastructureStack(Stack):
             versioned=False
         )
 
-        # Bucket policy to allow only specific audio file types
+        # Bucket policy to allow only specific file types in songs folder
+        # Allow audio files in songs/ folder only
         music_bucket.add_to_resource_policy(
             iam.PolicyStatement(
-                sid="DenyNonAudioFiles",
+                sid="DenyNonAudioFilesInSongs",
                 effect=iam.Effect.DENY,
                 principals=[iam.AnyPrincipal()],
                 actions=["s3:PutObject"],
-                resources=[f"{music_bucket.bucket_arn}/*"],
+                resources=[f"{music_bucket.bucket_arn}/songs/*"],
                 conditions={
                     "StringNotLike": {
-                        "s3:x-amz-server-side-encryption-customer-algorithm": [
+                        "s3:content-type": [
                             "audio/mpeg",      # .mp3
                             "audio/mp3",       # .mp3 (alternative)
                             "audio/wav",       # .wav
@@ -75,6 +76,30 @@ class InfrastructureStack(Stack):
                             "audio/vorbis",    # .ogg (alternative)
                             "audio/aac",       # .aac
                             "audio/x-aac"      # .aac (alternative)
+                        ]
+                    }
+                }
+            )
+        )
+
+        # Allow image files in artists/ and albums/ folders
+        music_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="DenyNonImageFilesInArtistsAlbums",
+                effect=iam.Effect.DENY,
+                principals=[iam.AnyPrincipal()],
+                actions=["s3:PutObject"],
+                resources=[
+                    f"{music_bucket.bucket_arn}/artists/*",
+                    f"{music_bucket.bucket_arn}/albums/*"
+                ],
+                conditions={
+                    "StringNotLike": {
+                        "s3:content-type": [
+                            "image/jpeg",
+                            "image/jpg",
+                            "image/png",
+                            "image/webp"
                         ]
                     }
                 }
@@ -232,11 +257,20 @@ class InfrastructureStack(Stack):
             'role': lambda_role
         }
 
+        # Create Lambda layer for common code
+        common_layer = _lambda.LayerVersion(
+            self, "CommonLayer",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "..", "lambda_layer")),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
+            description="Common utilities and models for Lambda functions"
+        )
+
         # ARTISTS FUNCTIONS
         create_artist_fn = _lambda.Function(
             self, "CreateArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="create_artist.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -244,6 +278,7 @@ class InfrastructureStack(Stack):
             self, "ListArtistsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="list_artists.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -251,6 +286,7 @@ class InfrastructureStack(Stack):
             self, "GetArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="get_artist.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -263,13 +299,15 @@ class InfrastructureStack(Stack):
             memory_size=1024,  # More memory for file processing
             environment=lambda_environment,
             role=lambda_role,
-            runtime=_lambda.Runtime.PYTHON_3_11
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            layers=[common_layer]
         )
 
         list_songs_fn = _lambda.Function(
             self, "ListSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="list_songs.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -277,6 +315,7 @@ class InfrastructureStack(Stack):
             self, "GetSongFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_song.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -285,6 +324,7 @@ class InfrastructureStack(Stack):
             self, "CreateAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="create_album.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -292,6 +332,7 @@ class InfrastructureStack(Stack):
             self, "ListAlbumsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="list_albums.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -299,6 +340,7 @@ class InfrastructureStack(Stack):
             self, "GetAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album.lambda_handler",
+            layers=[common_layer],
             **lambda_config
         )
 
@@ -406,6 +448,42 @@ class InfrastructureStack(Stack):
             apigateway.LambdaIntegration(get_album_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # ======================
+        # GATEWAY RESPONSES FOR CORS
+        # ======================
+        # Add CORS headers to all error responses from API Gateway
+        cors_headers = {
+            'Access-Control-Allow-Origin': "'*'",
+            'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            'Access-Control-Allow-Methods': "'GET,POST,PUT,DELETE,OPTIONS'"
+        }
+
+        api.add_gateway_response(
+            "Unauthorized",
+            type=apigateway.ResponseType.UNAUTHORIZED,
+            status_code="401",
+            response_headers=cors_headers
+        )
+
+        api.add_gateway_response(
+            "AccessDenied",
+            type=apigateway.ResponseType.ACCESS_DENIED,
+            status_code="403",
+            response_headers=cors_headers
+        )
+
+        api.add_gateway_response(
+            "Default4xx",
+            type=apigateway.ResponseType.DEFAULT_4_XX,
+            response_headers=cors_headers
+        )
+
+        api.add_gateway_response(
+            "Default5xx",
+            type=apigateway.ResponseType.DEFAULT_5_XX,
+            response_headers=cors_headers
         )
 
         # ======================

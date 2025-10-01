@@ -7,7 +7,7 @@ echo Starting deployment...
 
 REM Deploy CDK stack
 echo Deploying CDK stack...
-call cdk deploy
+call cdk deploy --require-approval never
 
 REM Check if deployment was successful
 if %ERRORLEVEL% neq 0 (

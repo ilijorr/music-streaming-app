@@ -32,7 +32,45 @@ export class ConfigService {
       console.log('Config loaded successfully:', this.config);
     } catch (error) {
       console.error('Failed to load config.json!', error);
+      console.error('Make sure the config.json file exists in src/assets/ directory');
+      console.error('You can generate it by running the deployment script: deploy.bat or deploy.sh');
+
+      // Use a fallback config for development if config.json is not available
+      console.warn('Using fallback development config');
+      this.config = {
+        apiUrl: 'http://localhost:3000/dev',
+        cognito: {
+          userPoolId: 'PLACEHOLDER',
+          userPoolClientId: 'PLACEHOLDER',
+          region: 'eu-central-1'
+        },
+        s3: {
+          bucketName: 'PLACEHOLDER',
+          region: 'eu-central-1'
+        },
+        allowedAudioFormats: [
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/wav',
+          'audio/flac',
+          'audio/m4a',
+          'audio/ogg',
+          'audio/aac'
+        ],
+        allowedAudioExtensions: [
+          '.mp3',
+          '.wav',
+          '.flac',
+          '.m4a',
+          '.ogg',
+          '.aac'
+        ]
+      };
     }
+  }
+
+  isConfigLoaded(): boolean {
+    return !!this.config;
   }
 
   get(): AppConfig {
