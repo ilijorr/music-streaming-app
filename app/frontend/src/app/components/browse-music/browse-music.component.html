@@ -1,5 +1,20 @@
 <div class="browse-music-container">
-  <h1>Music Library</h1>
+  <div class="header">
+    <h1>Music Library</h1>
+    <div class="header-actions">
+      @if (currentUser()) {
+        <span class="user-info">Welcome, {{ currentUser()!.givenName || currentUser()!.username }}!</span>
+      }
+      @if (isAdmin()) {
+        <button type="button" class="btn btn-secondary" (click)="navigateToUpload()">
+          Upload Music
+        </button>
+      }
+      <button type="button" class="btn btn-danger" (click)="logout()">
+        Logout
+      </button>
+    </div>
+  </div>
 
   <!-- Search and Filters -->
   <div class="filters-section">

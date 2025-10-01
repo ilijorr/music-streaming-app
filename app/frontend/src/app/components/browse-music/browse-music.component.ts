@@ -1,8 +1,10 @@
 import { Component, ChangeDetectionStrategy, signal, computed, inject } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { MusicCardComponent } from '../music-card/music-card.component';
 import { MusicContent } from '../../models/music-content.interface';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-browse-music',
@@ -13,6 +15,8 @@ import { MusicContent } from '../../models/music-content.interface';
 })
 export class BrowseMusicComponent {
   private readonly fb = inject(FormBuilder);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
   // Mock data - in real app this would come from a service
   private readonly mockMusicContent = signal<MusicContent[]>([
@@ -129,6 +133,9 @@ export class BrowseMusicComponent {
 
   protected readonly totalResults = computed(() => this.filteredContent().length);
 
+  protected readonly currentUser = this.authService.currentUser;
+  protected readonly isAdmin = computed(() => this.authService.isAdmin());
+
   protected onPlayTrack(content: MusicContent): void {
     // Stop current audio if playing
     const currentAudio = this.audioElement();
@@ -178,5 +185,18 @@ export class BrowseMusicComponent {
 
   protected clearFilters(): void {
     this.filterForm.reset();
+  }
+
+  protected async logout(): Promise<void> {
+    try {
+      await this.authService.signOut();
+      this.router.navigate(['/auth/login']);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }
+
+  protected navigateToUpload(): void {
+    this.router.navigate(['/music/upload']);
   }
 }

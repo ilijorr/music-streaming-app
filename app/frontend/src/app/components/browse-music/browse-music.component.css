@@ -4,12 +4,48 @@
   padding: 2rem;
 }
 
-h1 {
-  text-align: center;
-  color: #333;
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+h1 {
+  color: #333;
   font-size: 2.5rem;
   font-weight: 300;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
 }
 
 .filters-section {
