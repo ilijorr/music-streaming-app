@@ -3,8 +3,7 @@ from aws_cdk import (
     RemovalPolicy,
     CfnOutput,
     aws_s3 as s3,
-    aws_dynamodb as dynamodb,
-    aws_cognito as cognito,
+    aws_dynamodb as dynamodb, aws_cognito as cognito,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
     aws_iam as iam,
@@ -284,6 +283,22 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        get_presigned_url_fn = _lambda.Function(
+            self, "GetPresignedUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_presigned_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        create_song_from_s3_fn = _lambda.Function(
+            self, "CreateSongFromS3Function",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="create_song_from_s3.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
         # ALBUMS FUNCTIONS
         create_album_fn = _lambda.Function(
             self, "CreateAlbumFunction",
@@ -433,6 +448,24 @@ class InfrastructureStack(Stack):
         song_cover_url.add_method(
             "GET",
             apigateway.LambdaIntegration(get_song_cover_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/presigned-url
+        presigned_url = songs.add_resource("presigned-url")
+        presigned_url.add_method(
+            "POST",
+            apigateway.LambdaIntegration(get_presigned_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/from-s3
+        from_s3 = songs.add_resource("from-s3")
+        from_s3.add_method(
+            "POST",
+            apigateway.LambdaIntegration(create_song_from_s3_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
