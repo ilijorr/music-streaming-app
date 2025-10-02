@@ -239,17 +239,6 @@ class InfrastructureStack(Stack):
         )
 
         # SONGS FUNCTIONS
-        upload_song_fn = _lambda.Function(
-            self, "UploadSongFunction",
-            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
-            handler="upload_song.lambda_handler",
-            timeout=Duration.seconds(60),  # Longer timeout for file upload
-            memory_size=1024,  # More memory for file processing
-            environment=lambda_environment,
-            role=lambda_role,
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            layers=[common_layer]
-        )
 
         list_songs_fn = _lambda.Function(
             self, "ListSongsFunction",
@@ -412,12 +401,6 @@ class InfrastructureStack(Stack):
 
         # /songs
         songs = api.root.add_resource("songs")
-        songs.add_method(
-            "POST",
-            apigateway.LambdaIntegration(upload_song_fn),
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO
-        )
         songs.add_method(
             "GET",
             apigateway.LambdaIntegration(list_songs_fn),

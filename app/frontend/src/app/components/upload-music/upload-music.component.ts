@@ -7,7 +7,7 @@ import { Router } from '@angular/router';
 import { MusicContent } from '../../models/music-content.interface';
 import { Album } from '../../models/album.interface';
 import { ArtistResponse } from '../../models/artist.interface';
-import { SongService, CreateSongRequest, CreateSongFromS3Request } from '../../services/song.service';
+import { SongService, CreateSongRequest } from '../../services/song.service';
 import { S3UploadService, S3UploadProgress, S3UploadResult } from '../../services/s3-upload.service';
 import { ArtistService } from '../../services/artist.service';
 import { AlbumService, AlbumResponse } from '../../services/album.service';
@@ -268,7 +268,7 @@ export class UploadMusicComponent implements OnInit {
 
       // Step 4: Create song metadata in backend
       this.uploadStatus.set('Saving song metadata...');
-      const request: CreateSongFromS3Request = {
+      const request: CreateSongRequest = {
         audioFileKey: audioUploadResult.key,
         title: formValue.title.trim(),
         artistIds: formValue.selectedArtists,
@@ -291,7 +291,7 @@ export class UploadMusicComponent implements OnInit {
       }
 
       // Call API
-      this.songService.createSongFromS3(request).subscribe({
+      this.songService.createSong(request).subscribe({
         next: (response) => {
           console.log('Single song uploaded successfully:', response);
           this.uploadStatus.set('Upload completed!');
@@ -340,11 +340,11 @@ export class UploadMusicComponent implements OnInit {
       const formValue = this.albumForm.value;
       const coverImage = this.selectedCoverImage();
 
-      // Step 1: Upload cover image to S3 if present
-      let coverUploadResult: S3UploadResult | undefined;
+      // Step 1: Convert cover image to base64 if present
+      let coverImageBase64: string | undefined;
       if (coverImage) {
-        this.uploadStatus.set('Uploading album cover...');
-        coverUploadResult = await this.uploadFileToS3(coverImage, 'cover');
+        this.uploadStatus.set('Processing album cover...');
+        coverImageBase64 = await this.albumService.fileToBase64(coverImage);
       }
 
       // Step 2: Create the album
@@ -356,7 +356,7 @@ export class UploadMusicComponent implements OnInit {
         genres: formValue.genres
           .map((genre: string) => genre.trim())
           .filter((genre: string) => genre.length > 0),
-        coverImageKey: coverUploadResult?.key
+        coverImageBase64
       };
 
       this.albumService.createAlbum(albumRequest).subscribe({
@@ -386,7 +386,7 @@ export class UploadMusicComponent implements OnInit {
               }
 
               // Prepare song request
-              const songRequest: CreateSongFromS3Request = {
+              const songRequest: CreateSongRequest = {
                 audioFileKey: audioUploadResult.key,
                 title: songData.title.trim(),
                 artistIds: formValue.artistIds,
@@ -405,7 +405,7 @@ export class UploadMusicComponent implements OnInit {
 
               // Create song metadata
               await new Promise<void>((resolve, reject) => {
-                this.songService.createSongFromS3(songRequest).subscribe({
+                this.songService.createSong(songRequest).subscribe({
                   next: () => {
                     console.log(`Song ${i + 1}/${totalSongs} uploaded successfully`);
                     resolve();
