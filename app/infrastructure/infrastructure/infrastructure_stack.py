@@ -268,6 +268,22 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        get_download_url_fn = _lambda.Function(
+            self, "GetDownloadUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_download_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        get_song_cover_url_fn = _lambda.Function(
+            self, "GetSongCoverUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_cover_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
         # ALBUMS FUNCTIONS
         create_album_fn = _lambda.Function(
             self, "CreateAlbumFunction",
@@ -303,6 +319,22 @@ class InfrastructureStack(Stack):
             role=lambda_role,
             runtime=_lambda.Runtime.PYTHON_3_11,
             layers=[common_layer]
+        )
+
+        get_cover_url_fn = _lambda.Function(
+            self, "GetCoverUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
+            handler="get_cover_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        get_album_songs_fn = _lambda.Function(
+            self, "GetAlbumSongsFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
+            handler="get_album_songs.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
         )
 
         # ======================
@@ -387,6 +419,24 @@ class InfrastructureStack(Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
 
+        # /songs/{id}/download-url
+        download_url = song_id.add_resource("download-url")
+        download_url.add_method(
+            "GET",
+            apigateway.LambdaIntegration(get_download_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/{id}/cover-url
+        song_cover_url = song_id.add_resource("cover-url")
+        song_cover_url.add_method(
+            "GET",
+            apigateway.LambdaIntegration(get_song_cover_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
         # /albums
         albums = api.root.add_resource("albums")
         albums.add_method(
@@ -407,6 +457,24 @@ class InfrastructureStack(Stack):
         album_id.add_method(
             "GET",
             apigateway.LambdaIntegration(get_album_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /albums/{id}/cover-url
+        cover_url = album_id.add_resource("cover-url")
+        cover_url.add_method(
+            "GET",
+            apigateway.LambdaIntegration(get_cover_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /albums/{id}/songs
+        album_songs = album_id.add_resource("songs")
+        album_songs.add_method(
+            "GET",
+            apigateway.LambdaIntegration(get_album_songs_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )

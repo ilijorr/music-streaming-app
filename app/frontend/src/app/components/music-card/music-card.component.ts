@@ -1,6 +1,6 @@
-import { Component, ChangeDetectionStrategy, input, output, signal, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, signal, computed, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MusicContent } from '../../models/music-content.interface';
+import { SongData, SongService } from '../../services/song.service';
 
 @Component({
   selector: 'app-music-card',
@@ -10,14 +10,33 @@ import { MusicContent } from '../../models/music-content.interface';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MusicCardComponent {
-  readonly content = input.required<MusicContent>();
-  readonly onPlay = output<MusicContent>();
+  private readonly songService = inject(SongService);
+
+  readonly content = input.required<SongData>();
+  readonly onPlay = output<SongData>();
 
   protected readonly isPlaying = signal(false);
-  protected readonly coverImageUrl = computed(() => {
-    const content = this.content();
-    return content.coverImage ? URL.createObjectURL(content.coverImage) : null;
-  });
+  protected readonly coverImageUrl = signal<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const song = this.content();
+      if (song.coverUrl && song.coverUrl.startsWith('s3://')) {
+        // Load presigned URL for S3 cover
+        this.songService.getCoverImageUrl(song.songId).subscribe({
+          next: (response) => {
+            this.coverImageUrl.set(response.downloadUrl);
+          },
+          error: (error) => {
+            console.error('Error loading song cover image:', error);
+            this.coverImageUrl.set(null);
+          }
+        });
+      } else {
+        this.coverImageUrl.set(song.coverUrl || null);
+      }
+    });
+  }
 
   protected readonly fileSizeInMB = computed(() => {
     return (this.content().fileSize / 1024 / 1024).toFixed(2);
@@ -36,13 +55,14 @@ export class MusicCardComponent {
     this.onPlay.emit(this.content());
   }
 
-  protected formatDate(date: Date): string {
+  protected formatDate(date: string | Date): string {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(dateObj);
   }
 }

@@ -19,6 +19,26 @@
     </div>
   </div>
 
+  <!-- View Mode Tabs -->
+  <div class="view-mode-tabs">
+    <button
+      type="button"
+      class="tab"
+      [class.active]="viewMode() === 'songs'"
+      (click)="setViewMode('songs')"
+    >
+      Songs
+    </button>
+    <button
+      type="button"
+      class="tab"
+      [class.active]="viewMode() === 'albums'"
+      (click)="setViewMode('albums')"
+    >
+      Albums
+    </button>
+  </div>
+
   <!-- Search and Filters -->
   <div class="filters-section">
     <form [formGroup]="filterForm">
@@ -57,16 +77,18 @@
           </select>
         </div>
 
-        <!-- File Type Filter -->
-        <div class="filter-group">
-          <label for="fileType">File Type</label>
-          <select id="fileType" formControlName="fileType" class="form-control">
-            <option value="">All Types</option>
-            @for (type of fileTypes(); track type) {
-              <option [value]="type">{{ type }}</option>
-            }
-          </select>
-        </div>
+        <!-- File Type Filter (only for songs) -->
+        @if (viewMode() === 'songs') {
+          <div class="filter-group">
+            <label for="fileType">File Type</label>
+            <select id="fileType" formControlName="fileType" class="form-control">
+              <option value="">All Types</option>
+              @for (type of fileTypes(); track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+          </div>
+        }
       </div>
 
       <div class="filter-actions">
@@ -94,25 +116,86 @@
   }
 
   <!-- Results Info -->
-  <div class="results-info">
-    <span>Showing {{ totalResults() }} track{{ totalResults() !== 1 ? 's' : '' }}</span>
-  </div>
+  @if (viewMode() === 'songs') {
+    <div class="results-info">
+      <span>Showing {{ totalResults() }} track{{ totalResults() !== 1 ? 's' : '' }}</span>
+    </div>
+  } @else {
+    <div class="results-info">
+      <span>Showing {{ totalAlbums() }} album{{ totalAlbums() !== 1 ? 's' : '' }}</span>
+    </div>
+  }
 
   <!-- Music Content List -->
-  <div class="content-list">
-    @if (filteredContent().length > 0) {
-      @for (content of filteredContent(); track content.fileName) {
-        <app-music-card
-          [content]="content"
-          (onPlay)="onPlayTrack($event)"
-        />
+  @if (viewMode() === 'songs') {
+    <div class="content-list">
+      @if (filteredContent().length > 0) {
+        @for (song of filteredContent(); track song.songId) {
+          <app-music-card
+            [content]="song"
+            (onPlay)="onPlayTrack($event)"
+          />
+        }
+      } @else {
+        <div class="no-results">
+          <h3>No music found</h3>
+          <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+        </div>
       }
+    </div>
+  }
+
+  <!-- Albums List -->
+  @if (viewMode() === 'albums') {
+    @if (selectedAlbum()) {
+      <!-- Album Detail View -->
+      <div class="album-detail-view">
+        <div class="album-detail-header">
+          <button class="btn btn-secondary" (click)="closeAlbumView()">
+            ← Back to Albums
+          </button>
+          <h2>{{ selectedAlbum()!.title }}</h2>
+          <p class="album-artists">
+            by {{ selectedAlbum()!.artistIds.join(', ') }}
+          </p>
+        </div>
+
+        <div class="album-songs-list">
+          @if (loading()) {
+            <div class="loading">Loading songs...</div>
+          } @else if (albumSongs().length > 0) {
+            <h3>Tracks ({{ albumSongs().length }})</h3>
+            @for (song of albumSongs(); track song.songId) {
+              <app-music-card
+                [content]="song"
+                (onPlay)="onPlayTrack($event)"
+              />
+            }
+          } @else {
+            <div class="no-results">
+              <h3>No songs found in this album</h3>
+            </div>
+          }
+        </div>
+      </div>
     } @else {
-      <div class="no-results">
-        <h3>No music found</h3>
-        <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+      <!-- Albums Grid -->
+      <div class="content-list">
+        @if (filteredAlbums().length > 0) {
+          @for (album of filteredAlbums(); track album.albumId) {
+            <app-album-card
+              [album]="album"
+              (onView)="onViewAlbum($event)"
+            />
+          }
+        } @else {
+          <div class="no-results">
+            <h3>No albums found</h3>
+            <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+          </div>
+        }
       </div>
     }
-  </div>
+  }
 
 </div>
