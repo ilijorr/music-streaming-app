@@ -13,12 +13,7 @@
     <div class="album-info">
       <h3 class="album-title">{{ album().title }}</h3>
       <div class="artists">
-        @for (artistId of album().artistIds; track artistId) {
-          <span class="artist">{{ artistId }}</span>
-          @if (!$last) {
-            <span class="separator">, </span>
-          }
-        }
+        <span class="artist">{{ artistNames() }}</span>
       </div>
       <div class="release-date">{{ formattedReleaseDate() }}</div>
     </div>

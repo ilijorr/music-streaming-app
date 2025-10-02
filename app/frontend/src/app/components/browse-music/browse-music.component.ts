@@ -8,6 +8,7 @@ import { MusicContent } from '../../models/music-content.interface';
 import { AuthService } from '../../services/auth.service';
 import { SongService, SongData } from '../../services/song.service';
 import { AlbumService, AlbumResponse } from '../../services/album.service';
+import { ArtistService } from '../../services/artist.service';
 
 @Component({
   selector: 'app-browse-music',
@@ -21,6 +22,7 @@ export class BrowseMusicComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly songService = inject(SongService);
   private readonly albumService = inject(AlbumService);
+  private readonly artistService = inject(ArtistService);
   private readonly router = inject(Router);
 
   protected readonly songs = signal<SongData[]>([]);
@@ -42,8 +44,27 @@ export class BrowseMusicComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // Load artists first to populate cache
+    this.artistService.listArtists().subscribe({
+      next: () => {
+        console.log('Artists loaded and cached');
+      },
+      error: (error) => {
+        console.error('Error loading artists:', error);
+      }
+    });
+
     this.loadSongs();
     this.loadAlbums();
+  }
+
+  /**
+   * Get artist names for display
+   */
+  protected getArtistNames(artistIds: string[]): string {
+    return artistIds
+      .map(id => this.artistService.getCachedArtistName(id))
+      .join(', ');
   }
 
   private loadSongs(): void {
@@ -81,11 +102,18 @@ export class BrowseMusicComponent implements OnInit {
   });
 
   protected readonly allArtists = computed(() => {
-    const artists = new Set<string>();
+    const artistIds = new Set<string>();
     this.songs().forEach(song => {
-      song.artistIds.forEach(artistId => artists.add(artistId));
+      song.artistIds.forEach(artistId => artistIds.add(artistId));
     });
-    return Array.from(artists).sort();
+
+    // Convert to array of objects with id and name
+    return Array.from(artistIds)
+      .map(id => ({
+        id,
+        name: this.artistService.getCachedArtistName(id)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   });
 
   protected readonly fileTypes = computed(() => {

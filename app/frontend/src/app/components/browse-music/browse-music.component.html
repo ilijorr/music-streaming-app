@@ -71,8 +71,8 @@
           <label for="selectedArtist">Artist</label>
           <select id="selectedArtist" formControlName="selectedArtist" class="form-control">
             <option value="">All Artists</option>
-            @for (artist of allArtists(); track artist) {
-              <option [value]="artist">{{ artist }}</option>
+            @for (artist of allArtists(); track artist.id) {
+              <option [value]="artist.id">{{ artist.name }}</option>
             }
           </select>
         </div>

@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { ConfigService } from './config.service';
 
 export interface CreateAlbumRequest {
@@ -38,6 +39,7 @@ export interface ListAlbumsResponse {
 export class AlbumService {
   private readonly http = inject(HttpClient);
   private readonly configService = inject(ConfigService);
+  private readonly albumCache = new Map<string, AlbumResponse>();
 
   private get apiUrl(): string {
     return this.configService.getApiUrl();
@@ -54,14 +56,33 @@ export class AlbumService {
    * List all albums
    */
   listAlbums(): Observable<ListAlbumsResponse> {
-    return this.http.get<ListAlbumsResponse>(`${this.apiUrl}albums`);
+    return this.http.get<ListAlbumsResponse>(`${this.apiUrl}albums`).pipe(
+      tap(response => {
+        // Cache all albums
+        response.albums.forEach(album => {
+          this.albumCache.set(album.albumId, album);
+        });
+      })
+    );
   }
 
   /**
    * Get a specific album by ID
    */
   getAlbum(id: string): Observable<{ album: AlbumResponse }> {
-    return this.http.get<{ album: AlbumResponse }>(`${this.apiUrl}albums/${id}`);
+    return this.http.get<{ album: AlbumResponse }>(`${this.apiUrl}albums/${id}`).pipe(
+      tap(response => {
+        // Cache album
+        this.albumCache.set(id, response.album);
+      })
+    );
+  }
+
+  /**
+   * Get cached album name (synchronous, returns ID if not in cache)
+   */
+  getCachedAlbumName(id: string): string {
+    return this.albumCache.get(id)?.title || id;
   }
 
   /**
