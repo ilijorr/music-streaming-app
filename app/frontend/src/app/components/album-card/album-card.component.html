@@ -1,0 +1,53 @@
+<div class="album-card">
+  <div class="card-header">
+    <div class="cover-image">
+      @if (coverImageUrl()) {
+        <img [src]="coverImageUrl()" [alt]="album().title + ' cover'" />
+      } @else {
+        <div class="no-cover">
+          <span>♪</span>
+        </div>
+      }
+    </div>
+
+    <div class="album-info">
+      <h3 class="album-title">{{ album().title }}</h3>
+      <div class="artists">
+        @for (artistId of album().artistIds; track artistId) {
+          <span class="artist">{{ artistId }}</span>
+          @if (!$last) {
+            <span class="separator">, </span>
+          }
+        }
+      </div>
+      <div class="release-date">{{ formattedReleaseDate() }}</div>
+    </div>
+
+    <div class="view-button">
+      <button class="btn btn-primary" (click)="viewAlbum()">
+        View Album
+      </button>
+    </div>
+  </div>
+
+  <div class="card-content">
+    <!-- Genres -->
+    <div class="genres">
+      @for (genre of album().genres; track genre) {
+        <span class="genre-tag">{{ genre }}</span>
+      }
+    </div>
+
+    <!-- Album Information -->
+    <div class="album-details">
+      <div class="info-row">
+        <span class="label">Album ID:</span>
+        <span class="value">{{ album().albumId }}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Created:</span>
+        <span class="value">{{ album().createdAt | date:'short' }}</span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -65,6 +65,20 @@ export class AlbumService {
   }
 
   /**
+   * Get presigned URL for album cover image
+   */
+  getCoverImageUrl(albumId: string): Observable<{ downloadUrl: string }> {
+    return this.http.get<{ downloadUrl: string }>(`${this.apiUrl}albums/${albumId}/cover-url`);
+  }
+
+  /**
+   * Get songs for a specific album
+   */
+  getAlbumSongs(albumId: string): Observable<{ songs: any[], count: number }> {
+    return this.http.get<{ songs: any[], count: number }>(`${this.apiUrl}albums/${albumId}/songs`);
+  }
+
+  /**
    * Convert a File to Base64 string
    */
   async fileToBase64(file: File): Promise<string> {

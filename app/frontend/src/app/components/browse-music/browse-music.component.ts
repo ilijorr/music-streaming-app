@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MusicCardComponent } from '../music-card/music-card.component';
+import { AlbumCardComponent } from '../album-card/album-card.component';
 import { MusicContent } from '../../models/music-content.interface';
 import { AuthService } from '../../services/auth.service';
 import { SongService, SongData } from '../../services/song.service';
@@ -10,7 +11,7 @@ import { AlbumService, AlbumResponse } from '../../services/album.service';
 
 @Component({
   selector: 'app-browse-music',
-  imports: [CommonModule, ReactiveFormsModule, MusicCardComponent],
+  imports: [CommonModule, ReactiveFormsModule, MusicCardComponent, AlbumCardComponent],
   templateUrl: './browse-music.component.html',
   styleUrl: './browse-music.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -26,6 +27,9 @@ export class BrowseMusicComponent implements OnInit {
   protected readonly albums = signal<AlbumResponse[]>([]);
   protected readonly loading = signal<boolean>(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly viewMode = signal<'songs' | 'albums'>('songs');
+  protected readonly selectedAlbum = signal<AlbumResponse | null>(null);
+  protected readonly albumSongs = signal<SongData[]>([]);
 
   protected readonly currentlyPlaying = signal<SongData | null>(null);
   protected readonly audioElement = signal<HTMLAudioElement | null>(null);
@@ -129,8 +133,43 @@ export class BrowseMusicComponent implements OnInit {
 
   protected readonly totalResults = computed(() => this.filteredContent().length);
 
+  protected readonly filteredAlbums = computed(() => {
+    const albumList = this.albums();
+    const filters = this.filterForm.value;
+
+    return albumList.filter(album => {
+      // Search term filter
+      if (filters.searchTerm) {
+        const searchLower = filters.searchTerm.toLowerCase();
+        const matchesTitle = album.title.toLowerCase().includes(searchLower);
+
+        if (!matchesTitle) {
+          return false;
+        }
+      }
+
+      // Genre filter
+      if (filters.selectedGenre && !album.genres.includes(filters.selectedGenre)) {
+        return false;
+      }
+
+      // Artist filter
+      if (filters.selectedArtist && !album.artistIds.includes(filters.selectedArtist)) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  protected readonly totalAlbums = computed(() => this.filteredAlbums().length);
+
   protected readonly currentUser = this.authService.currentUser;
   protected readonly isAdmin = computed(() => this.authService.isAdmin());
+
+  protected setViewMode(mode: 'songs' | 'albums'): void {
+    this.viewMode.set(mode);
+  }
 
   protected async onPlayTrack(song: SongData): Promise<void> {
     // Stop current audio if playing
@@ -214,5 +253,33 @@ export class BrowseMusicComponent implements OnInit {
 
   protected navigateToCreateArtist(): void {
     this.router.navigate(['/artists/create']);
+  }
+
+  protected onViewAlbum(album: AlbumResponse): void {
+    this.selectedAlbum.set(album);
+    this.loading.set(true);
+    this.error.set(null);
+
+    console.log('Loading songs for album:', album.albumId);
+
+    this.albumService.getAlbumSongs(album.albumId).subscribe({
+      next: (response) => {
+        console.log('Album songs loaded:', response);
+        this.albumSongs.set(response.songs);
+        this.loading.set(false);
+      },
+      error: (error) => {
+        console.error('Error loading album songs:', error);
+        console.error('Error status:', error.status);
+        console.error('Error message:', error.message);
+        this.error.set(`Failed to load album songs: ${error.status} ${error.statusText}`);
+        this.loading.set(false);
+      }
+    });
+  }
+
+  protected closeAlbumView(): void {
+    this.selectedAlbum.set(null);
+    this.albumSongs.set([]);
   }
 }
