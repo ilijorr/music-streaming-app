@@ -225,7 +225,6 @@ class InfrastructureStack(Stack):
             self, "CreateArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="create_artist.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -233,7 +232,6 @@ class InfrastructureStack(Stack):
             self, "ListArtistsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="list_artists.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -241,7 +239,6 @@ class InfrastructureStack(Stack):
             self, "GetArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="get_artist.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -251,7 +248,6 @@ class InfrastructureStack(Stack):
             self, "ListSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="list_songs.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -259,7 +255,6 @@ class InfrastructureStack(Stack):
             self, "GetSongFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_song.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -267,7 +262,6 @@ class InfrastructureStack(Stack):
             self, "GetDownloadUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_download_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -275,7 +269,6 @@ class InfrastructureStack(Stack):
             self, "GetSongCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_cover_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -283,7 +276,6 @@ class InfrastructureStack(Stack):
             self, "GetPresignedUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_presigned_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -291,7 +283,6 @@ class InfrastructureStack(Stack):
             self, "CreateSongFromS3Function",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="create_song_from_s3.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -300,7 +291,6 @@ class InfrastructureStack(Stack):
             self, "CreateAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="create_album.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -308,7 +298,6 @@ class InfrastructureStack(Stack):
             self, "ListAlbumsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="list_albums.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -316,7 +305,6 @@ class InfrastructureStack(Stack):
             self, "GetAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -329,14 +317,12 @@ class InfrastructureStack(Stack):
             environment=lambda_environment,
             role=lambda_role,
             runtime=_lambda.Runtime.PYTHON_3_11,
-            layers=[common_layer]
         )
 
         get_cover_url_fn = _lambda.Function(
             self, "GetCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_cover_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -344,7 +330,6 @@ class InfrastructureStack(Stack):
             self, "GetAlbumSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album_songs.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
