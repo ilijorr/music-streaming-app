@@ -11,8 +11,8 @@ class Artist:
         name: str,
         biography: str,
         genres: List[str],
-        singles: List[str],
-        albums: List[str],
+        singles: Optional[List[str]] = None,
+        albums: Optional[List[str]] = None,
         image_url: Optional[str] = None,
         created_at: Optional[str] = None,
         updated_at: Optional[str] = None
