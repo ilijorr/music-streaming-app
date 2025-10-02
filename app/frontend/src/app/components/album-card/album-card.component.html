@@ -23,6 +23,17 @@
         View Album
       </button>
     </div>
+
+    @if (isAdmin()) {
+      <div class="admin-actions">
+        <button class="btn btn-edit" (click)="editAlbum()" title="Edit Album">
+          ✏️
+        </button>
+        <button class="btn btn-delete" (click)="deleteAlbum()" title="Delete Album">
+          🗑️
+        </button>
+      </div>
+    }
   </div>
 
   <div class="card-content">

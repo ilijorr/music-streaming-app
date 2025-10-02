@@ -119,4 +119,31 @@ export class AlbumService {
       reader.readAsDataURL(file);
     });
   }
+
+  /**
+   * Update an existing album (Admin only)
+   */
+  updateAlbum(albumId: string, request: UpdateAlbumRequest): Observable<UpdateAlbumResponse> {
+    return this.http.put<UpdateAlbumResponse>(`${this.apiUrl}albums/${albumId}`, request);
+  }
+
+  /**
+   * Delete an album (Admin only)
+   */
+  deleteAlbum(albumId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.apiUrl}albums/${albumId}`);
+  }
+}
+
+export interface UpdateAlbumRequest {
+  title?: string;
+  artistIds?: string[];
+  genres?: string[];
+  releaseDate?: string;
+  coverImageBase64?: string;
+}
+
+export interface UpdateAlbumResponse {
+  message: string;
+  album: AlbumResponse;
 }

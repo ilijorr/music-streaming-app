@@ -32,6 +32,16 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
+    path: 'music/edit/:id',
+    loadComponent: () => import('./components/edit-song/edit-song.component').then(m => m.EditSongComponent),
+    canActivate: [adminGuard]
+  },
+  {
+    path: 'albums/edit/:id',
+    loadComponent: () => import('./components/edit-album/edit-album.component').then(m => m.EditAlbumComponent),
+    canActivate: [adminGuard]
+  },
+  {
     path: 'browse-music',
     redirectTo: '/music/browse',
     pathMatch: 'full'

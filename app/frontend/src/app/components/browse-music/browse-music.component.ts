@@ -540,4 +540,77 @@ export class BrowseMusicComponent implements OnInit, OnDestroy {
     // When viewing album from artist page, just load the album songs
     this.onViewAlbum(album);
   }
+
+  protected onEditSong(song: SongData): void {
+    // Navigate to edit song page
+    this.router.navigate(['/music/edit', song.songId]);
+  }
+
+  protected onDeleteSong(song: SongData): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.songService.deleteSong(song.songId).subscribe({
+      next: () => {
+        console.log(`Song ${song.songId} deleted successfully`);
+        // Remove from local list
+        this.songs.set(this.songs().filter(s => s.songId !== song.songId));
+        // Also remove from album songs if present
+        this.albumSongs.set(this.albumSongs().filter(s => s.songId !== song.songId));
+        // Also remove from artist songs if present
+        this.artistSongs.set(this.artistSongs().filter(s => s.songId !== song.songId));
+        this.loading.set(false);
+      },
+      error: (error) => {
+        console.error('Error deleting song:', error);
+        this.error.set(`Failed to delete song: ${error.message || 'Unknown error'}`);
+        this.loading.set(false);
+        alert(`Failed to delete song: ${error.message || 'Unknown error'}`);
+      }
+    });
+  }
+
+  protected onEditAlbum(album: AlbumResponse): void {
+    // Navigate to edit album page
+    this.router.navigate(['/albums/edit', album.albumId]);
+  }
+
+  protected onDeleteAlbum(album: AlbumResponse): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.albumService.deleteAlbum(album.albumId).subscribe({
+      next: (response) => {
+        console.log(`Album ${album.albumId} deleted successfully`, response);
+
+        // Remove from local albums list
+        this.albums.set(this.albums().filter(a => a.albumId !== album.albumId));
+
+        // Also remove from artist albums if present
+        this.artistAlbums.set(this.artistAlbums().filter(a => a.albumId !== album.albumId));
+
+        // Remove all songs that belonged to this album from the songs list
+        // (Backend cascade deletes them, so we need to update our local state)
+        this.songs.set(this.songs().filter(s => s.albumId !== album.albumId));
+        this.albumSongs.set(this.albumSongs().filter(s => s.albumId !== album.albumId));
+        this.artistSongs.set(this.artistSongs().filter(s => s.albumId !== album.albumId));
+
+        // Clear selected album if it was the one deleted
+        if (this.selectedAlbum()?.albumId === album.albumId) {
+          this.closeAlbumView();
+        }
+
+        this.loading.set(false);
+
+        // Show success message
+        alert(`Album and all its songs deleted successfully`);
+      },
+      error: (error) => {
+        console.error('Error deleting album:', error);
+        this.error.set(`Failed to delete album: ${error.message || 'Unknown error'}`);
+        this.loading.set(false);
+        alert(`Failed to delete album: ${error.message || 'Unknown error'}`);
+      }
+    });
+  }
 }

@@ -1,0 +1,119 @@
+<div class="edit-song-container">
+  <div class="header">
+    <h1>Edit Song</h1>
+  </div>
+
+  @if (loading()) {
+    <div class="loading">Loading song data...</div>
+  } @else if (error()) {
+    <div class="error-message">{{ error() }}</div>
+  } @else if (song()) {
+    <form [formGroup]="editForm" (ngSubmit)="onSubmit()" class="edit-form">
+      <!-- Title -->
+      <div class="form-group">
+        <label for="title">Song Title *</label>
+        <input
+          id="title"
+          type="text"
+          formControlName="title"
+          class="form-control"
+          placeholder="Enter song title"
+        />
+        @if (editForm.get('title')?.invalid && editForm.get('title')?.touched) {
+          <div class="error">Title is required</div>
+        }
+      </div>
+
+      <!-- Artists -->
+      <div class="form-group">
+        <label>Artists *</label>
+        <div class="checkbox-grid">
+          @for (artist of allArtists(); track artist.id) {
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                [checked]="isArtistSelected(artist.id)"
+                (change)="toggleArtist(artist.id)"
+              />
+              <span>{{ artist.name }}</span>
+            </label>
+          }
+        </div>
+        @if (editForm.get('artistIds')?.invalid && editForm.get('artistIds')?.touched) {
+          <div class="error">At least one artist is required</div>
+        }
+      </div>
+
+      <!-- Genres -->
+      <div class="form-group">
+        <label>Genres *</label>
+        <div class="checkbox-grid">
+          @for (genre of availableGenres; track genre) {
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                [checked]="isGenreSelected(genre)"
+                (change)="toggleGenre(genre)"
+              />
+              <span>{{ genre }}</span>
+            </label>
+          }
+        </div>
+        @if (editForm.get('genres')?.invalid && editForm.get('genres')?.touched) {
+          <div class="error">At least one genre is required</div>
+        }
+      </div>
+
+      <!-- Album -->
+      <div class="form-group">
+        <label for="albumId">Album (Optional)</label>
+        <select id="albumId" formControlName="albumId" class="form-control">
+          <option value="">No Album</option>
+          @for (album of allAlbums(); track album.id) {
+            <option [value]="album.id">{{ album.title }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Cover Image -->
+      <div class="form-group">
+        <label for="coverImage">Update Cover Image (Optional)</label>
+        <input
+          id="coverImage"
+          type="file"
+          accept="image/*"
+          (change)="onFileSelected($event)"
+          class="form-control"
+        />
+        <small class="help-text">Leave empty to keep current cover</small>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="cancel()"
+          [disabled]="saving()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="editForm.invalid || saving()"
+        >
+          @if (saving()) {
+            Saving...
+          } @else {
+            Save Changes
+          }
+        </button>
+      </div>
+
+      @if (error()) {
+        <div class="error-message">{{ error() }}</div>
+      }
+    </form>
+  }
+</div>

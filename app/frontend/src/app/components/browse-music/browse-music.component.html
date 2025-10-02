@@ -155,6 +155,8 @@
           <app-music-card
             [content]="song"
             (onPlay)="onPlayTrack($event)"
+            (onEdit)="onEditSong($event)"
+            (onDelete)="onDeleteSong($event)"
           />
         }
       } @else {
@@ -190,6 +192,8 @@
               <app-music-card
                 [content]="song"
                 (onPlay)="onPlayTrack($event)"
+                (onEdit)="onEditSong($event)"
+                (onDelete)="onDeleteSong($event)"
               />
             }
           } @else {
@@ -207,6 +211,8 @@
             <app-album-card
               [album]="album"
               (onView)="onViewAlbum($event)"
+              (onEdit)="onEditAlbum($event)"
+              (onDelete)="onDeleteAlbum($event)"
             />
           }
         } @else {
@@ -247,6 +253,8 @@
                 <app-album-card
                   [album]="album"
                   (onView)="onViewAlbumFromArtist($event)"
+                  (onEdit)="onEditAlbum($event)"
+                  (onDelete)="onDeleteAlbum($event)"
                 />
               }
             </div>
@@ -264,6 +272,8 @@
                 <app-music-card
                   [content]="song"
                   (onPlay)="onPlayTrack($event)"
+                  (onEdit)="onEditSong($event)"
+                  (onDelete)="onDeleteSong($event)"
                 />
               }
             </div>

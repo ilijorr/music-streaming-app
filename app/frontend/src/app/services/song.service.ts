@@ -169,4 +169,32 @@ export class SongService {
       audio.src = url;
     });
   }
+
+  /**
+   * Update an existing song (Admin only)
+   */
+  updateSong(songId: string, request: UpdateSongRequest): Observable<UpdateSongResponse> {
+    return this.http.put<UpdateSongResponse>(`${this.apiUrl}songs/${songId}`, request);
+  }
+
+  /**
+   * Delete a song (Admin only)
+   */
+  deleteSong(songId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.apiUrl}songs/${songId}`);
+  }
+}
+
+export interface UpdateSongRequest {
+  title?: string;
+  artistIds?: string[];
+  genres?: string[];
+  albumId?: string;
+  featuringArtists?: string[];
+  coverImageBase64?: string;
+}
+
+export interface UpdateSongResponse {
+  message: string;
+  song: SongData;
 }

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { SongData, SongService } from '../../services/song.service';
 import { ArtistService } from '../../services/artist.service';
 import { AlbumService } from '../../services/album.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-music-card',
@@ -15,9 +16,14 @@ export class MusicCardComponent {
   private readonly songService = inject(SongService);
   private readonly artistService = inject(ArtistService);
   private readonly albumService = inject(AlbumService);
+  private readonly authService = inject(AuthService);
 
   readonly content = input.required<SongData>();
   readonly onPlay = output<SongData>();
+  readonly onEdit = output<SongData>();
+  readonly onDelete = output<SongData>();
+
+  protected readonly isAdmin = computed(() => this.authService.isAdmin());
 
   protected readonly isPlaying = signal(false);
   protected readonly coverImageUrl = signal<string | null>(null);
@@ -68,6 +74,16 @@ export class MusicCardComponent {
 
   protected playTrack(): void {
     this.onPlay.emit(this.content());
+  }
+
+  protected editSong(): void {
+    this.onEdit.emit(this.content());
+  }
+
+  protected deleteSong(): void {
+    if (confirm(`Are you sure you want to delete "${this.content().title}"?`)) {
+      this.onDelete.emit(this.content());
+    }
   }
 
   protected formatDate(date: string | Date): string {

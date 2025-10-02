@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, input, output, computed, inject, si
 import { CommonModule } from '@angular/common';
 import { AlbumResponse, AlbumService } from '../../services/album.service';
 import { ArtistService } from '../../services/artist.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-album-card',
@@ -14,9 +15,14 @@ import { ArtistService } from '../../services/artist.service';
 export class AlbumCardComponent {
   private readonly albumService = inject(AlbumService);
   private readonly artistService = inject(ArtistService);
+  private readonly authService = inject(AuthService);
 
   readonly album = input.required<AlbumResponse>();
   readonly onView = output<AlbumResponse>();
+  readonly onEdit = output<AlbumResponse>();
+  readonly onDelete = output<AlbumResponse>();
+
+  protected readonly isAdmin = computed(() => this.authService.isAdmin());
 
   protected readonly coverImageUrl = signal<string | null>(null);
 
@@ -57,5 +63,15 @@ export class AlbumCardComponent {
 
   protected viewAlbum(): void {
     this.onView.emit(this.album());
+  }
+
+  protected editAlbum(): void {
+    this.onEdit.emit(this.album());
+  }
+
+  protected deleteAlbum(): void {
+    if (confirm(`Are you sure you want to delete the album "${this.album().title}"?`)) {
+      this.onDelete.emit(this.album());
+    }
   }
 }

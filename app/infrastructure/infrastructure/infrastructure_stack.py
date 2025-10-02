@@ -284,6 +284,26 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        update_song_fn = _lambda.Function(
+            self, "UpdateSongFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="update_song.lambda_handler",
+            timeout=Duration.seconds(60),  # Longer timeout for file upload
+            memory_size=1024,  # More memory for file processing
+            environment=lambda_environment,
+            role=lambda_role,
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            layers=[common_layer]
+        )
+
+        delete_song_fn = _lambda.Function(
+            self, "DeleteSongFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="delete_song.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
         # ALBUMS FUNCTIONS
         create_album_fn = _lambda.Function(
             self, "CreateAlbumFunction",
@@ -333,6 +353,26 @@ class InfrastructureStack(Stack):
             self, "GetAlbumSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album_songs.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        update_album_fn = _lambda.Function(
+            self, "UpdateAlbumFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
+            handler="update_album.lambda_handler",
+            timeout=Duration.seconds(60),  # Longer timeout for cover image upload
+            memory_size=1024,  # More memory for file processing
+            environment=lambda_environment,
+            role=lambda_role,
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            layers=[common_layer]
+        )
+
+        delete_album_fn = _lambda.Function(
+            self, "DeleteAlbumFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
+            handler="delete_album.lambda_handler",
             layers=[common_layer],
             **lambda_config
         )
@@ -418,6 +458,18 @@ class InfrastructureStack(Stack):
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
+        song_id.add_method(
+            "PUT",
+            apigateway.LambdaIntegration(update_song_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+        song_id.add_method(
+            "DELETE",
+            apigateway.LambdaIntegration(delete_song_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
 
         # /songs/{id}/download-url
         download_url = song_id.add_resource("download-url")
@@ -457,6 +509,18 @@ class InfrastructureStack(Stack):
         album_id.add_method(
             "GET",
             apigateway.LambdaIntegration(get_album_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+        album_id.add_method(
+            "PUT",
+            apigateway.LambdaIntegration(update_album_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+        album_id.add_method(
+            "DELETE",
+            apigateway.LambdaIntegration(delete_album_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )

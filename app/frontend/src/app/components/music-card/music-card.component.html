@@ -23,6 +23,17 @@
         <span class="play-icon">▶</span>
       </button>
     </div>
+
+    @if (isAdmin()) {
+      <div class="admin-actions">
+        <button class="btn btn-edit" (click)="editSong()" title="Edit Song">
+          ✏️
+        </button>
+        <button class="btn btn-delete" (click)="deleteSong()" title="Delete Song">
+          🗑️
+        </button>
+      </div>
+    }
   </div>
 
   <div class="card-content">
