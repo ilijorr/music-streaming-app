@@ -7,11 +7,12 @@ echo Starting deployment...
 
 REM Deploy CDK stack
 echo Deploying CDK stack...
-call cdk deploy --require-approval never
+cdk deploy
 
 REM Check if deployment was successful
-if %ERRORLEVEL% neq 0 (
+IF %ERRORLEVEL% NEQ 0 (
     echo CDK deployment failed!
+    pause
     exit /b 1
 )
 
@@ -24,19 +25,18 @@ REM ===================
 echo Generating Angular config file...
 
 REM Get CloudFormation outputs
-for /f "delims=" %%i in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text') do set API_URL=%%i
-for /f "delims=" %%i in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolId'].OutputValue" --output text') do set USER_POOL_ID=%%i
-for /f "delims=" %%i in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientId'].OutputValue" --output text') do set USER_POOL_CLIENT_ID=%%i
-for /f "delims=" %%i in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text') do set BUCKET_NAME=%%i
+for /f "tokens=*" %%I in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text') do set API_URL=%%I
 
-REM Extract region from User Pool ID (format: region_randomstring)
-for /f "tokens=1 delims=_" %%i in ("%USER_POOL_ID%") do set AWS_REGION=%%i
+for /f "tokens=*" %%I in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolId'].OutputValue" --output text') do set USER_POOL_ID=%%I
+
+for /f "tokens=*" %%I in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientId'].OutputValue" --output text') do set USER_POOL_CLIENT_ID=%%I
+
+for /f "tokens=*" %%I in ('aws cloudformation describe-stacks --stack-name InfrastructureStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text') do set BUCKET_NAME=%%I
 
 echo API URL: %API_URL%
 echo User Pool ID: %USER_POOL_ID%
 echo User Pool Client ID: %USER_POOL_CLIENT_ID%
 echo S3 Bucket Name: %BUCKET_NAME%
-echo AWS Region: %AWS_REGION%
 
 REM Define the frontend config path
 set FRONTEND_CONFIG_PATH=..\frontend\src\assets\config.json
@@ -51,11 +51,11 @@ echo   "apiUrl": "%API_URL%",
 echo   "cognito": {
 echo     "userPoolId": "%USER_POOL_ID%",
 echo     "userPoolClientId": "%USER_POOL_CLIENT_ID%",
-echo     "region": "%AWS_REGION%"
+echo     "region": "%USER_POOL_ID:~0,9%"
 echo   },
 echo   "s3": {
 echo     "bucketName": "%BUCKET_NAME%",
-echo     "region": "%AWS_REGION%"
+echo     "region": "%USER_POOL_ID:~0,9%"
 echo   },
 echo   "allowedAudioFormats": [
 echo     "audio/mpeg",
@@ -83,15 +83,7 @@ echo   ]
 echo }
 ) > "%FRONTEND_CONFIG_PATH%"
 
-echo Angular config file generated at: %FRONTEND_CONFIG_PATH%
-
-REM Verify the file was created
-if exist "%FRONTEND_CONFIG_PATH%" (
-    echo Config file content:
-    type "%FRONTEND_CONFIG_PATH%"
-) else (
-    echo Error: Config file was not created!
-    exit /b 1
-)
-
+echo Angular config file created at: %FRONTEND_CONFIG_PATH%
+echo.
 echo Deployment completed successfully!
+pause
