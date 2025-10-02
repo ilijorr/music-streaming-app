@@ -1,6 +1,8 @@
 import { Component, ChangeDetectionStrategy, input, output, signal, computed, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SongData, SongService } from '../../services/song.service';
+import { ArtistService } from '../../services/artist.service';
+import { AlbumService } from '../../services/album.service';
 
 @Component({
   selector: 'app-music-card',
@@ -11,12 +13,25 @@ import { SongData, SongService } from '../../services/song.service';
 })
 export class MusicCardComponent {
   private readonly songService = inject(SongService);
+  private readonly artistService = inject(ArtistService);
+  private readonly albumService = inject(AlbumService);
 
   readonly content = input.required<SongData>();
   readonly onPlay = output<SongData>();
 
   protected readonly isPlaying = signal(false);
   protected readonly coverImageUrl = signal<string | null>(null);
+
+  protected readonly artistNames = computed(() => {
+    return this.content().artistIds
+      .map(id => this.artistService.getCachedArtistName(id))
+      .join(', ');
+  });
+
+  protected readonly albumName = computed(() => {
+    const albumId = this.content().albumId;
+    return albumId ? this.albumService.getCachedAlbumName(albumId) : null;
+  });
 
   constructor() {
     effect(() => {

@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, input, output, computed, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AlbumResponse, AlbumService } from '../../services/album.service';
+import { ArtistService } from '../../services/artist.service';
 
 @Component({
   selector: 'app-album-card',
@@ -12,11 +13,18 @@ import { AlbumResponse, AlbumService } from '../../services/album.service';
 })
 export class AlbumCardComponent {
   private readonly albumService = inject(AlbumService);
+  private readonly artistService = inject(ArtistService);
 
   readonly album = input.required<AlbumResponse>();
   readonly onView = output<AlbumResponse>();
 
   protected readonly coverImageUrl = signal<string | null>(null);
+
+  protected readonly artistNames = computed(() => {
+    return this.album().artistIds
+      .map(id => this.artistService.getCachedArtistName(id))
+      .join(', ');
+  });
 
   constructor() {
     effect(() => {

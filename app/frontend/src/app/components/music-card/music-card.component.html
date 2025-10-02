@@ -13,12 +13,7 @@
     <div class="track-info">
       <h3 class="track-title">{{ content().title }}</h3>
       <div class="artists">
-        @for (artistId of content().artistIds; track artistId) {
-          <span class="artist">{{ artistId }}</span>
-          @if (!$last) {
-            <span class="separator">, </span>
-          }
-        }
+        <span class="artist">{{ artistNames() }}</span>
       </div>
       <div class="duration">{{ durationFormatted() }}</div>
     </div>
@@ -60,10 +55,10 @@
         <span class="label">Updated:</span>
         <span class="value">{{ formatDate(content().updatedAt) }}</span>
       </div>
-      @if (content().albumId) {
+      @if (albumName()) {
         <div class="info-row">
           <span class="label">Album:</span>
-          <span class="value">{{ content().albumId }}</span>
+          <span class="value">{{ albumName() }}</span>
         </div>
       }
     </div>
