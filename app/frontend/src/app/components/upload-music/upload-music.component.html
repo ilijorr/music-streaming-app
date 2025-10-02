@@ -406,7 +406,16 @@
   @if (loading()) {
     <div class="loading-overlay">
       <div class="spinner"></div>
-      <p>{{ uploadType() === 'single' ? 'Uploading song...' : 'Uploading album...' }}</p>
+      <p>{{ uploadStatus() || (uploadType() === 'single' ? 'Uploading song...' : 'Uploading album...') }}</p>
+
+      @if (uploadProgress() > 0) {
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+          </div>
+          <span class="progress-text">{{ uploadProgress() }}%</span>
+        </div>
+      }
     </div>
   }
 

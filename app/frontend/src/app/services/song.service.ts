@@ -15,6 +15,18 @@ export interface CreateSongRequest {
   albumId?: string;
 }
 
+export interface CreateSongFromS3Request {
+  audioFileKey: string;
+  title: string;
+  artistIds: string[];
+  genres: string[];
+  filename?: string;
+  coverImageKey?: string;
+  duration?: number;
+  featuringArtists?: string[];
+  albumId?: string;
+}
+
 export interface SongData {
   songId: string;
   title: string;
@@ -89,6 +101,13 @@ export class SongService {
    */
   createSong(request: CreateSongRequest): Observable<CreateSongResponse> {
     return this.http.post<CreateSongResponse>(`${this.apiUrl}songs`, request);
+  }
+
+  /**
+   * Create a new song from S3 keys
+   */
+  createSongFromS3(request: CreateSongFromS3Request): Observable<CreateSongResponse> {
+    return this.http.post<CreateSongResponse>(`${this.apiUrl}songs/from-s3`, request);
   }
 
   /**
