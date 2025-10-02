@@ -3,8 +3,7 @@ from aws_cdk import (
     RemovalPolicy,
     CfnOutput,
     aws_s3 as s3,
-    aws_dynamodb as dynamodb,
-    aws_cognito as cognito,
+    aws_dynamodb as dynamodb, aws_cognito as cognito,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
     aws_iam as iam,
@@ -240,17 +239,6 @@ class InfrastructureStack(Stack):
         )
 
         # SONGS FUNCTIONS
-        upload_song_fn = _lambda.Function(
-            self, "UploadSongFunction",
-            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
-            handler="upload_song.lambda_handler",
-            timeout=Duration.seconds(60),  # Longer timeout for file upload
-            memory_size=1024,  # More memory for file processing
-            environment=lambda_environment,
-            role=lambda_role,
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            layers=[common_layer]
-        )
 
         list_songs_fn = _lambda.Function(
             self, "ListSongsFunction",
@@ -280,6 +268,22 @@ class InfrastructureStack(Stack):
             self, "GetSongCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_cover_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        get_presigned_url_fn = _lambda.Function(
+            self, "GetPresignedUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_presigned_url.lambda_handler",
+            layers=[common_layer],
+            **lambda_config
+        )
+
+        create_song_from_s3_fn = _lambda.Function(
+            self, "CreateSongFromS3Function",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="create_song_from_s3.lambda_handler",
             layers=[common_layer],
             **lambda_config
         )
@@ -398,12 +402,6 @@ class InfrastructureStack(Stack):
         # /songs
         songs = api.root.add_resource("songs")
         songs.add_method(
-            "POST",
-            apigateway.LambdaIntegration(upload_song_fn),
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO
-        )
-        songs.add_method(
             "GET",
             apigateway.LambdaIntegration(list_songs_fn),
             authorizer=authorizer,
@@ -433,6 +431,24 @@ class InfrastructureStack(Stack):
         song_cover_url.add_method(
             "GET",
             apigateway.LambdaIntegration(get_song_cover_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/presigned-url
+        presigned_url = songs.add_resource("presigned-url")
+        presigned_url.add_method(
+            "POST",
+            apigateway.LambdaIntegration(get_presigned_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/from-s3
+        from_s3 = songs.add_resource("from-s3")
+        from_s3.add_method(
+            "POST",
+            apigateway.LambdaIntegration(create_song_from_s3_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )

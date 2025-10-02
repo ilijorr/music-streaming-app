@@ -8,6 +8,7 @@ import { MusicContent } from '../../models/music-content.interface';
 import { Album } from '../../models/album.interface';
 import { ArtistResponse } from '../../models/artist.interface';
 import { SongService, CreateSongRequest } from '../../services/song.service';
+import { S3UploadService, S3UploadProgress, S3UploadResult } from '../../services/s3-upload.service';
 import { ArtistService } from '../../services/artist.service';
 import { AlbumService, AlbumResponse } from '../../services/album.service';
 import { getAllGenres } from '../../models/genre.enum';
@@ -22,6 +23,7 @@ import { getAllGenres } from '../../models/genre.enum';
 export class UploadMusicComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly songService = inject(SongService);
+  private readonly s3UploadService = inject(S3UploadService);
   private readonly artistService = inject(ArtistService);
   private readonly albumService = inject(AlbumService);
   private readonly router = inject(Router);
@@ -32,6 +34,8 @@ export class UploadMusicComponent implements OnInit {
   protected readonly loading = signal<boolean>(false);
   protected readonly error = signal<string | null>(null);
   protected readonly success = signal<boolean>(false);
+  protected readonly uploadProgress = signal<number>(0);
+  protected readonly uploadStatus = signal<string>('');
 
   protected readonly coverImagePreview = computed(() => {
     const image = this.selectedCoverImage();
@@ -129,16 +133,10 @@ export class UploadMusicComponent implements OnInit {
     const file = target.files?.[0];
 
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('audio/')) {
-        this.error.set('Please select a valid audio file');
-        return;
-      }
-
-      // Validate file size (max 50MB)
-      const maxSizeInBytes = 50 * 1024 * 1024; // 50MB
-      if (file.size > maxSizeInBytes) {
-        this.error.set('Audio file size must be less than 50MB');
+      // Use S3 upload service validation
+      const validation = this.s3UploadService.validateFile(file, 'song');
+      if (!validation.valid) {
+        this.error.set(validation.error!);
         return;
       }
 
@@ -152,16 +150,10 @@ export class UploadMusicComponent implements OnInit {
     const file = target.files?.[0];
 
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        this.error.set('Please select a valid image file');
-        return;
-      }
-
-      // Validate file size (max 5MB)
-      const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
-      if (file.size > maxSizeInBytes) {
-        this.error.set('Image size must be less than 5MB');
+      // Use S3 upload service validation
+      const validation = this.s3UploadService.validateFile(file, 'cover');
+      if (!validation.valid) {
+        this.error.set(validation.error!);
         return;
       }
 
@@ -200,16 +192,10 @@ export class UploadMusicComponent implements OnInit {
     const file = target.files?.[0];
 
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('audio/')) {
-        this.error.set('Please select a valid audio file');
-        return;
-      }
-
-      // Validate file size (max 50MB)
-      const maxSizeInBytes = 50 * 1024 * 1024;
-      if (file.size > maxSizeInBytes) {
-        this.error.set('Audio file size must be less than 50MB');
+      // Use S3 upload service validation
+      const validation = this.s3UploadService.validateFile(file, 'song');
+      if (!validation.valid) {
+        this.error.set(validation.error!);
         return;
       }
 
@@ -252,22 +238,27 @@ export class UploadMusicComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.success.set(false);
+    this.uploadProgress.set(0);
+    this.uploadStatus.set('Preparing upload...');
 
     try {
       const formValue = this.singleForm.value;
       const audioFile = this.selectedAudioFile()!;
       const coverImage = this.selectedCoverImage();
 
-      // Convert audio file to base64
-      const audioFileBase64 = await this.songService.fileToBase64(audioFile);
+      // Step 1: Upload audio file to S3
+      this.uploadStatus.set('Uploading audio file...');
+      const audioUploadResult = await this.uploadFileToS3(audioFile, 'song');
 
-      // Convert cover image to base64 if present
-      let coverImageBase64: string | undefined;
+      // Step 2: Upload cover image to S3 if present
+      let coverUploadResult: S3UploadResult | undefined;
       if (coverImage) {
-        coverImageBase64 = await this.songService.fileToBase64(coverImage);
+        this.uploadStatus.set('Uploading cover image...');
+        coverUploadResult = await this.uploadFileToS3(coverImage, 'cover');
       }
 
-      // Get audio duration
+      // Step 3: Get audio duration
+      this.uploadStatus.set('Processing metadata...');
       let duration: number | undefined;
       try {
         duration = await this.songService.getAudioDuration(audioFile);
@@ -275,16 +266,17 @@ export class UploadMusicComponent implements OnInit {
         console.warn('Could not extract audio duration:', error);
       }
 
-      // Prepare request payload for single song
+      // Step 4: Create song metadata in backend
+      this.uploadStatus.set('Saving song metadata...');
       const request: CreateSongRequest = {
-        audioFileBase64,
+        audioFileKey: audioUploadResult.key,
         title: formValue.title.trim(),
         artistIds: formValue.selectedArtists,
         genres: formValue.genres
           .map((genre: string) => genre.trim())
           .filter((genre: string) => genre.length > 0),
         filename: audioFile.name,
-        coverImageBase64,
+        coverImageKey: coverUploadResult?.key,
         duration
       };
 
@@ -302,6 +294,7 @@ export class UploadMusicComponent implements OnInit {
       this.songService.createSong(request).subscribe({
         next: (response) => {
           console.log('Single song uploaded successfully:', response);
+          this.uploadStatus.set('Upload completed!');
           this.handleUploadSuccess();
         },
         error: (err) => {
@@ -309,10 +302,26 @@ export class UploadMusicComponent implements OnInit {
         }
       });
     } catch (err) {
-      console.error('Error processing single song files:', err);
+      console.error('Error uploading single song:', err);
       this.loading.set(false);
-      this.error.set('Failed to process files. Please try again.');
+      this.uploadStatus.set('');
+      this.error.set('Failed to upload files. Please try again.');
     }
+  }
+
+  private async uploadFileToS3(file: File, uploadType: 'song' | 'cover'): Promise<S3UploadResult> {
+    return new Promise((resolve, reject) => {
+      this.s3UploadService.uploadFile(file, uploadType, (progress: S3UploadProgress) => {
+        this.uploadProgress.set(progress.progress);
+      }).subscribe({
+        next: (result) => {
+          resolve(result);
+        },
+        error: (error) => {
+          reject(error);
+        }
+      });
+    });
   }
 
   private async submitAlbum(): Promise<void> {
@@ -324,18 +333,22 @@ export class UploadMusicComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.success.set(false);
+    this.uploadProgress.set(0);
+    this.uploadStatus.set('Preparing album upload...');
 
     try {
       const formValue = this.albumForm.value;
       const coverImage = this.selectedCoverImage();
 
-      // Convert cover image to base64 if present
+      // Step 1: Convert cover image to base64 if present
       let coverImageBase64: string | undefined;
       if (coverImage) {
+        this.uploadStatus.set('Processing album cover...');
         coverImageBase64 = await this.albumService.fileToBase64(coverImage);
       }
 
-      // Step 1: Create the album
+      // Step 2: Create the album
+      this.uploadStatus.set('Creating album...');
       const albumRequest = {
         title: formValue.title.trim(),
         artistIds: formValue.artistIds,
@@ -351,48 +364,50 @@ export class UploadMusicComponent implements OnInit {
           console.log('Album created successfully:', albumResponse);
           const albumId = albumResponse.album.albumId;
 
-          // Step 2: Upload each song with the albumId
-          const songUploads: Promise<void>[] = [];
+          // Step 3: Upload each song with the albumId
+          const totalSongs = this.albumSongs.length;
 
-          for (let i = 0; i < this.albumSongs.length; i++) {
+          for (let i = 0; i < totalSongs; i++) {
             const songData = this.albumSongs.at(i).value;
             const songFile = songData.audioFile as File;
 
-            const songUploadPromise = new Promise<void>(async (resolve, reject) => {
+            this.uploadStatus.set(`Uploading song ${i + 1} of ${totalSongs}: ${songData.title}...`);
+
+            try {
+              // Upload audio file to S3
+              const audioUploadResult = await this.uploadFileToS3(songFile, 'song');
+
+              // Get duration
+              let duration: number | undefined;
               try {
-                // Convert audio to base64
-                const audioFileBase64 = await this.songService.fileToBase64(songFile);
+                duration = await this.songService.getAudioDuration(songFile);
+              } catch (error) {
+                console.warn(`Could not extract audio duration for ${songFile.name}:`, error);
+              }
 
-                // Get duration
-                let duration: number | undefined;
-                try {
-                  duration = await this.songService.getAudioDuration(songFile);
-                } catch (error) {
-                  console.warn(`Could not extract audio duration for ${songFile.name}:`, error);
-                }
+              // Prepare song request
+              const songRequest: CreateSongRequest = {
+                audioFileKey: audioUploadResult.key,
+                title: songData.title.trim(),
+                artistIds: formValue.artistIds,
+                genres: songData.genres
+                  .map((genre: string) => genre.trim())
+                  .filter((genre: string) => genre.length > 0),
+                filename: songFile.name,
+                duration,
+                albumId: albumId
+              };
 
-                // Prepare song request
-                const songRequest: CreateSongRequest = {
-                  audioFileBase64,
-                  title: songData.title.trim(),
-                  artistIds: formValue.artistIds,
-                  genres: songData.genres
-                    .map((genre: string) => genre.trim())
-                    .filter((genre: string) => genre.length > 0),
-                  filename: songFile.name,
-                  duration,
-                  albumId: albumId
-                };
+              // Add featuring artists if provided
+              if (songData.featuringArtists && songData.featuringArtists.length > 0) {
+                songRequest.featuringArtists = songData.featuringArtists;
+              }
 
-                // Add featuring artists if provided
-                if (songData.featuringArtists && songData.featuringArtists.length > 0) {
-                  songRequest.featuringArtists = songData.featuringArtists;
-                }
-
-                // Upload song
+              // Create song metadata
+              await new Promise<void>((resolve, reject) => {
                 this.songService.createSong(songRequest).subscribe({
                   next: () => {
-                    console.log(`Song ${i + 1}/${this.albumSongs.length} uploaded successfully`);
+                    console.log(`Song ${i + 1}/${totalSongs} uploaded successfully`);
                     resolve();
                   },
                   error: (err) => {
@@ -400,24 +415,24 @@ export class UploadMusicComponent implements OnInit {
                     reject(err);
                   }
                 });
-              } catch (err) {
-                reject(err);
-              }
-            });
+              });
 
-            songUploads.push(songUploadPromise);
+              // Update progress
+              const progress = Math.round(((i + 1) / totalSongs) * 100);
+              this.uploadProgress.set(progress);
+
+            } catch (err) {
+              console.error(`Error uploading song ${songFile.name}:`, err);
+              this.loading.set(false);
+              this.uploadStatus.set('');
+              this.error.set(`Failed to upload song: ${songData.title}. Please try again.`);
+              return;
+            }
           }
 
-          // Wait for all songs to upload
-          try {
-            await Promise.all(songUploads);
-            console.log('All songs uploaded successfully');
-            this.handleUploadSuccess();
-          } catch (err) {
-            console.error('Error uploading songs:', err);
-            this.loading.set(false);
-            this.error.set('Album created but some songs failed to upload. Please try again.');
-          }
+          console.log('All songs uploaded successfully');
+          this.uploadStatus.set('Upload completed!');
+          this.handleUploadSuccess();
         },
         error: (err) => {
           this.handleUploadError(err);
@@ -426,6 +441,7 @@ export class UploadMusicComponent implements OnInit {
     } catch (err) {
       console.error('Error processing album:', err);
       this.loading.set(false);
+      this.uploadStatus.set('');
       this.error.set('Failed to process album. Please try again.');
     }
   }

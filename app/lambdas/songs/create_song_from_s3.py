@@ -2,17 +2,15 @@ import os
 import json
 import uuid
 import boto3
-import base64
 from botocore.exceptions import ClientError
 from utils import (
     generate_response,
     validate_required_fields,
-    upload_to_s3,
     is_admin,
     parse_body,
     get_current_timestamp
 )
-from models import Song, extract_file_metadata
+from models import Song
 
 # Environment variables
 TABLE_NAME = os.environ.get('TABLE_NAME')
@@ -21,15 +19,16 @@ BUCKET_NAME = os.environ.get('BUCKET_NAME')
 # AWS clients
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(TABLE_NAME)
+s3_client = boto3.client('s3')
 
 
 def lambda_handler(event, context):
     """
-    Upload a new song (Admin only).
+    Create a new song from existing S3 objects (Admin only).
 
-    POST /songs
-    Body: {audioFileBase64, title, artistIds, albumId (optional),
-           genres, coverImageBase64 (optional), duration (optional)}
+    POST /songs/from-s3
+    Body: {audioFileKey, title, artistIds, albumId (optional),
+           genres, coverImageKey (optional), duration (optional)}
     """
     print(f"Received event: {json.dumps(event)}")
 
@@ -51,7 +50,7 @@ def lambda_handler(event, context):
             })
 
         # Validate required fields
-        required_fields = ['audioFileBase64', 'title', 'artistIds', 'genres']
+        required_fields = ['audioFileKey', 'title', 'artistIds', 'genres']
         validation_error = validate_required_fields(body, required_fields)
 
         if validation_error:
@@ -61,15 +60,15 @@ def lambda_handler(event, context):
             })
 
         # Extract fields
-        audio_file_base64 = body['audioFileBase64']
+        audio_file_key = body['audioFileKey']
         title = body['title'].strip()
         artist_ids = body['artistIds']
         album_id = body.get('albumId')
         genres = body['genres']
-        cover_image_base64 = body.get('coverImageBase64')
+        cover_image_key = body.get('coverImageKey')
         duration = body.get('duration')
         featuring_artists = body.get('featuringArtists', [])
-        filename = body.get('filename')  # Optional filename for metadata extraction
+        filename = body.get('filename', 'unknown.mp3')
 
         # Additional validation
         if not isinstance(artist_ids, list) or len(artist_ids) == 0:
@@ -105,52 +104,42 @@ def lambda_handler(event, context):
                     'message': 'Failed to validate artist IDs'
                 })
 
+        # Verify that S3 objects exist
+        try:
+            # Check audio file exists
+            s3_client.head_object(Bucket=BUCKET_NAME, Key=audio_file_key)
+            print(f"Verified audio file exists: {audio_file_key}")
+
+            # Get audio file metadata
+            audio_response = s3_client.head_object(Bucket=BUCKET_NAME, Key=audio_file_key)
+            file_size = audio_response['ContentLength']
+            file_type = audio_response.get('ContentType', 'audio/mpeg')
+            file_modified_at = audio_response['LastModified'].isoformat()
+
+            # Check cover image exists if provided
+            if cover_image_key:
+                s3_client.head_object(Bucket=BUCKET_NAME, Key=cover_image_key)
+                print(f"Verified cover image exists: {cover_image_key}")
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                return generate_response(400, {
+                    'error': 'Bad Request',
+                    'message': 'One or more files not found in S3'
+                })
+            else:
+                print(f"Error checking S3 objects: {str(e)}")
+                return generate_response(500, {
+                    'error': 'Internal Server Error',
+                    'message': 'Failed to verify file existence'
+                })
+
         # Generate unique song ID
         song_id = str(uuid.uuid4())
 
-        # Extract file metadata
-        file_metadata = extract_file_metadata(audio_file_base64, filename)
-
-        # Upload audio file to S3
-        try:
-            # Use appropriate extension based on file type
-            ext = '.mp3'  # default
-            if file_metadata['file_type'] == 'audio/wav':
-                ext = '.wav'
-            elif file_metadata['file_type'] == 'audio/mp4':
-                ext = '.m4a'
-
-            audio_key = f"songs/{song_id}{ext}"
-            file_url = upload_to_s3(
-                bucket=BUCKET_NAME,
-                key=audio_key,
-                file_data=audio_file_base64,
-                content_type=file_metadata['file_type']
-            )
-            print(f"Uploaded audio file to: {file_url}")
-
-        except Exception as e:
-            print(f"Failed to upload audio file: {str(e)}")
-            return generate_response(500, {
-                'error': 'Internal Server Error',
-                'message': f'Failed to upload audio file: {str(e)}'
-            })
-
-        # Upload cover image if provided
-        cover_url = None
-        if cover_image_base64:
-            try:
-                cover_key = f"covers/{song_id}.jpg"
-                cover_url = upload_to_s3(
-                    bucket=BUCKET_NAME,
-                    key=cover_key,
-                    file_data=cover_image_base64,
-                    content_type='image/jpeg'
-                )
-                print(f"Uploaded cover image to: {cover_url}")
-            except Exception as e:
-                print(f"Failed to upload cover image: {str(e)}")
-                # Continue without cover image
+        # Create file URLs
+        file_url = f"s3://{BUCKET_NAME}/{audio_file_key}"
+        cover_url = f"s3://{BUCKET_NAME}/{cover_image_key}" if cover_image_key else None
 
         # Create song object
         song = Song(
@@ -159,11 +148,11 @@ def lambda_handler(event, context):
             artist_ids=artist_ids,
             genres=genres,
             file_url=file_url,
-            file_name=file_metadata['file_name'],
-            file_type=file_metadata['file_type'],
-            file_size=file_metadata['file_size'],
-            file_created_at=file_metadata['file_created_at'],
-            file_modified_at=file_metadata['file_modified_at'],
+            file_name=filename,
+            file_type=file_type,
+            file_size=file_size,
+            file_created_at=get_current_timestamp(),  # Use current time as creation
+            file_modified_at=file_modified_at,
             album_id=album_id,
             cover_url=cover_url,
             duration=duration,
@@ -191,12 +180,12 @@ def lambda_handler(event, context):
 
         # Return success response
         return generate_response(201, {
-            'message': 'Song uploaded successfully',
+            'message': 'Song created successfully from S3 objects',
             'song': song.to_dict()
         })
 
     except Exception as e:
-        print(f"Error uploading song: {str(e)}")
+        print(f"Error creating song from S3: {str(e)}")
         return generate_response(500, {
             'error': 'Internal Server Error',
             'message': str(e)
