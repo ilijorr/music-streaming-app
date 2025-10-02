@@ -30,7 +30,11 @@ export class MusicCardComponent {
 
   protected readonly albumName = computed(() => {
     const albumId = this.content().albumId;
-    return albumId ? this.albumService.getCachedAlbumName(albumId) : null;
+    if (!albumId) return null;
+
+    const name = this.albumService.getCachedAlbumName(albumId);
+    // If the name is same as ID (UUID format), it means album is not cached yet
+    return name === albumId ? null : name;
   });
 
   constructor() {

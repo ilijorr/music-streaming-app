@@ -10,7 +10,7 @@
           Create Artist
         </button>
         <button type="button" class="btn btn-secondary" (click)="navigateToUpload()">
-          Upload Song
+          Upload
         </button>
       }
       <button type="button" class="btn btn-danger" (click)="logout()">
@@ -19,7 +19,6 @@
     </div>
   </div>
 
-  <!-- View Mode Tabs -->
   <div class="view-mode-tabs">
     <button
       type="button"
@@ -47,111 +46,43 @@
     </button>
   </div>
 
-  <!-- Search and Filters -->
-  <div class="filters-section">
-    <form [formGroup]="filterForm">
-      <div class="filters-grid">
-        <!-- Search -->
-        <div class="filter-group">
-          <label for="searchTerm">Search</label>
-          <input
-            id="searchTerm"
-            type="text"
-            formControlName="searchTerm"
-            class="form-control"
-            placeholder="Search by title, artist, or filename..."
-          />
-        </div>
+  @if (viewMode() === 'songs') {
+    <div class="results-info">
+      <span>Showing {{ totalSongs() }} track{{ totalSongs() !== 1 ? 's' : '' }}</span>
+    </div>
+  } @else if (viewMode() === 'albums') {
+    <div class="results-info">
+      <span>Showing {{ totalAlbums() }} album{{ totalAlbums() !== 1 ? 's' : '' }}</span>
+    </div>
+  } @else {
+    <div class="results-info">
+      <span>Showing {{ totalArtists() }} artist{{ totalArtists() !== 1 ? 's' : '' }}</span>
+    </div>
+  }
 
-        <!-- Genre Filter -->
-        <div class="filter-group">
-          <label for="selectedGenre">Genre</label>
-          <select id="selectedGenre" formControlName="selectedGenre" class="form-control">
-            <option value="">All Genres</option>
-            @for (genre of allGenres(); track genre) {
-              <option [value]="genre">{{ genre }}</option>
-            }
-          </select>
-        </div>
-
-        <!-- Artist Filter -->
-        <div class="filter-group">
-          <label for="selectedArtist">Artist</label>
-          <select id="selectedArtist" formControlName="selectedArtist" class="form-control" [disabled]="viewMode() === 'artists'">
-            <option value="">All Artists</option>
-            @for (artist of filteredArtistsByGenre(); track artist.id) {
-              <option [value]="artist.id">{{ artist.name }}</option>
-            }
-          </select>
-        </div>
-
-        <!-- Album Filter (only for songs view) -->
-        @if (viewMode() === 'songs') {
-          <div class="filter-group">
-            <label for="selectedAlbum">Album</label>
-            <select id="selectedAlbum" formControlName="selectedAlbum" class="form-control">
-              <option value="">All Albums</option>
-              @for (album of filteredAlbumsForDropdown(); track album.albumId) {
-                <option [value]="album.albumId">{{ album.title }}</option>
-              }
-            </select>
-          </div>
-        }
-
-        <!-- File Type Filter (only for songs) -->
-        @if (viewMode() === 'songs') {
-          <div class="filter-group">
-            <label for="fileType">File Type</label>
-            <select id="fileType" formControlName="fileType" class="form-control">
-              <option value="">All Types</option>
-              @for (type of fileTypes(); track type) {
-                <option [value]="type">{{ type }}</option>
-              }
-            </select>
-          </div>
-        }
-      </div>
-
-      <div class="filter-actions">
-        <button type="button" class="btn btn-secondary" (click)="clearFilters()">
-          Clear Filters
-        </button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Currently Playing -->
   @if (currentlyPlaying()) {
     <div class="now-playing">
       <div class="now-playing-content">
         <span class="now-playing-label">Now Playing:</span>
         <span class="now-playing-title">{{ currentlyPlaying()!.title }}</span>
-        <span class="now-playing-artist">
-          by {{ currentlyPlaying()!.artistIds.join(', ') }}
-        </span>
+        <span class="now-playing-artist">by {{ getArtistNames(currentlyPlaying()!.artistIds) }}</span>
       </div>
-      <button class="btn btn-danger btn-sm" (click)="stopPlayback()">
-        Stop
-      </button>
+      <div class="now-playing-actions">
+        <button class="btn btn-secondary" (click)="stopPlayback()">Stop</button>
+      </div>
     </div>
   }
 
-  <!-- Results Info -->
-  @if (viewMode() === 'songs') {
-    <div class="results-info">
-      <span>Showing {{ totalResults() }} track{{ totalResults() !== 1 ? 's' : '' }}</span>
-    </div>
-  } @else {
-    <div class="results-info">
-      <span>Showing {{ totalAlbums() }} album{{ totalAlbums() !== 1 ? 's' : '' }}</span>
+  @if (error()) {
+    <div class="error">
+      <p>{{ error() }}</p>
     </div>
   }
 
-  <!-- Music Content List -->
   @if (viewMode() === 'songs') {
     <div class="content-list">
-      @if (filteredContent().length > 0) {
-        @for (song of filteredContent(); track song.songId) {
+      @if (songs().length > 0) {
+        @for (song of songs(); track song.songId) {
           <app-music-card
             [content]="song"
             (onPlay)="onPlayTrack($event)"
@@ -159,29 +90,34 @@
         }
       } @else {
         <div class="no-results">
-          <h3>No music found</h3>
-          <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+          <h3>No songs available</h3>
         </div>
       }
     </div>
-  }
-
-  <!-- Albums List -->
-  @if (viewMode() === 'albums') {
+  } @else if (viewMode() === 'albums') {
     @if (selectedAlbum()) {
-      <!-- Album Detail View -->
       <div class="album-detail-view">
         <div class="album-detail-header">
           <button class="btn btn-secondary" (click)="closeAlbumView()">
-            ← Back to Albums
+            Back to Albums
           </button>
-          <h2>{{ selectedAlbum()!.title }}</h2>
-          <p class="album-artists">
-            by {{ getArtistNames(selectedAlbum()!.artistIds) }}
-          </p>
+          <div class="album-meta">
+            <h2>{{ selectedAlbum()!.title }}</h2>
+            <p>By {{ getArtistNames(selectedAlbum()!.artistIds) }}</p>
+            <div class="album-tags">
+              @for (genre of selectedAlbum()!.genres; track genre) {
+                <span class="genre-badge">{{ genre }}</span>
+              }
+            </div>
+          </div>
         </div>
 
-        <div class="album-songs-list">
+        <div class="album-content">
+          <div class="album-info">
+            <p><strong>Release Date:</strong> {{ selectedAlbum()!.releaseDate | date: 'mediumDate' }}</p>
+            <p><strong>Total Tracks:</strong> {{ albumSongs().length }}</p>
+          </div>
+
           @if (loading()) {
             <div class="loading">Loading songs...</div>
           } @else if (albumSongs().length > 0) {
@@ -200,10 +136,9 @@
         </div>
       </div>
     } @else {
-      <!-- Albums Grid -->
       <div class="content-list">
-        @if (filteredAlbums().length > 0) {
-          @for (album of filteredAlbums(); track album.albumId) {
+        @if (albums().length > 0) {
+          @for (album of albums(); track album.albumId) {
             <app-album-card
               [album]="album"
               (onView)="onViewAlbum($event)"
@@ -211,22 +146,17 @@
           }
         } @else {
           <div class="no-results">
-            <h3>No albums found</h3>
-            <p>Try adjusting your search criteria or clear the filters to see all content.</p>
+            <h3>No albums available</h3>
           </div>
         }
       </div>
     }
-  }
-
-  <!-- Artists List -->
-  @if (viewMode() === 'artists') {
+  } @else {
     @if (selectedArtistDetail()) {
-      <!-- Artist Detail View -->
       <div class="artist-detail-view">
         <div class="artist-detail-header">
           <button class="btn btn-secondary" (click)="closeArtistView()">
-            ← Back to Artists
+            Back to Artists
           </button>
           <h2>{{ selectedArtistDetail()!.name }}</h2>
           @if (selectedArtistDetail()!.genres && selectedArtistDetail()!.genres.length > 0) {
@@ -238,7 +168,6 @@
           }
         </div>
 
-        <!-- Artist's Albums -->
         @if (artistAlbums().length > 0) {
           <div class="artist-albums-section">
             <h3>Albums ({{ artistAlbums().length }})</h3>
@@ -253,7 +182,6 @@
           </div>
         }
 
-        <!-- Artist's Songs -->
         <div class="artist-songs-section">
           @if (loading()) {
             <div class="loading">Loading songs...</div>
@@ -275,13 +203,9 @@
         </div>
       </div>
     } @else {
-      <!-- Artists Grid -->
-      <div class="results-info">
-        <span>Showing {{ filteredArtists().length }} artist{{ filteredArtists().length !== 1 ? 's' : '' }}</span>
-      </div>
       <div class="artists-grid">
-        @if (filteredArtists().length > 0) {
-          @for (artist of filteredArtists(); track artist.id) {
+        @if (artistSummaries().length > 0) {
+          @for (artist of artistSummaries(); track artist.id) {
             <div class="artist-card" (click)="onViewArtist(artist)">
               <div class="artist-card-content">
                 <h3>{{ artist.name }}</h3>
@@ -301,12 +225,10 @@
           }
         } @else {
           <div class="no-results">
-            <h3>No artists found</h3>
-            <p>Try adjusting your search criteria or clear the filters to see all artists.</p>
+            <h3>No artists available</h3>
           </div>
         }
       </div>
     }
   }
-
 </div>
