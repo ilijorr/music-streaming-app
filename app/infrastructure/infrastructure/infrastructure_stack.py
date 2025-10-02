@@ -12,6 +12,9 @@ from aws_cdk import (
 from constructs import Construct
 import os
 
+# TODO:
+# 1. Limit CORS to frontend URLs once deployment is ready
+
 
 class InfrastructureStack(Stack):
 
@@ -51,9 +54,7 @@ class InfrastructureStack(Stack):
         )
 
         # Note: File type validation is handled at the application level (Lambda)
-        # S3 bucket policies with content-type conditions are complex and can be restrictive
-        # Access control is managed through IAM roles granted to Lambda functions
-
+        # S3 bucket policies with content-type conditions are complex and can be restrictive Access control is managed through IAM roles granted to Lambda functions
         # ======================
         # DYNAMODB TABLE
         # ======================
@@ -70,21 +71,21 @@ class InfrastructureStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
-            point_in_time_recovery=False  # Disabled for dev to save costs
+            point_in_time_recovery=False
         )
 
-        # Add Global Secondary Index for genre search
+        # GSI1: Genre-Entity Index (for both artists AND albums)
         music_table.add_global_secondary_index(
-            index_name="GSI1",
+            index_name="GenreEntityIndex",
             partition_key=dynamodb.Attribute(
-                name="GSI1PK",
+                name="GSI1PK",  # GENRE#rock, GENRE#pop, etc.
                 type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(
-                name="GSI1SK",
+                name="GSI1SK",  # ARTIST#id or ALBUM#id
                 type=dynamodb.AttributeType.STRING
             ),
-            projection_type=dynamodb.ProjectionType.ALL
+            projection_type=dynamodb.ProjectionType.KEYS_ONLY
         )
 
         # ======================
@@ -154,7 +155,7 @@ class InfrastructureStack(Stack):
         )
 
         # Create Cognito Groups
-        admins_group = cognito.CfnUserPoolGroup(
+        cognito.CfnUserPoolGroup(
             self, "AdminsGroup",
             user_pool_id=user_pool.user_pool_id,
             group_name="Admins",
@@ -162,7 +163,7 @@ class InfrastructureStack(Stack):
             precedence=1
         )
 
-        users_group = cognito.CfnUserPoolGroup(
+        cognito.CfnUserPoolGroup(
             self, "UsersGroup",
             user_pool_id=user_pool.user_pool_id,
             group_name="Users",
@@ -174,7 +175,12 @@ class InfrastructureStack(Stack):
         # LAMBDA FUNCTIONS
         # ======================
         # Get the path to lambdas directory
-        lambdas_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'lambdas')
+        lambdas_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), '..', 'lambdas'
+                )
+        lambda_layer_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), '..', 'lambda_layer'
+                )
 
         # Environment variables for all functions
         lambda_environment = {
@@ -196,29 +202,29 @@ class InfrastructureStack(Stack):
         music_table.grant_read_write_data(lambda_role)
         music_bucket.grant_read_write(lambda_role)
 
+        # Create Lambda layer for common code
+        common_layer = _lambda.LayerVersion(
+            self, "CommonLayer",
+            code=_lambda.Code.from_asset(lambda_layer_path),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
+            description="Common utilities and models for Lambda functions"
+        )
+
         # Common Lambda configuration
         lambda_config = {
             'runtime': _lambda.Runtime.PYTHON_3_11,
             'timeout': Duration.seconds(30),
             'memory_size': 512,
             'environment': lambda_environment,
-            'role': lambda_role
+            'role': lambda_role,
+            'layers': [common_layer]
         }
-
-        # Create Lambda layer for common code
-        common_layer = _lambda.LayerVersion(
-            self, "CommonLayer",
-            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "..", "lambda_layer")),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
-            description="Common utilities and models for Lambda functions"
-        )
 
         # ARTISTS FUNCTIONS
         create_artist_fn = _lambda.Function(
             self, "CreateArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="create_artist.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -226,7 +232,6 @@ class InfrastructureStack(Stack):
             self, "ListArtistsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="list_artists.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -234,7 +239,6 @@ class InfrastructureStack(Stack):
             self, "GetArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="get_artist.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -244,7 +248,6 @@ class InfrastructureStack(Stack):
             self, "ListSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="list_songs.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -252,7 +255,6 @@ class InfrastructureStack(Stack):
             self, "GetSongFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_song.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -260,7 +262,6 @@ class InfrastructureStack(Stack):
             self, "GetDownloadUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_download_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -268,7 +269,6 @@ class InfrastructureStack(Stack):
             self, "GetSongCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_cover_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -276,7 +276,6 @@ class InfrastructureStack(Stack):
             self, "GetPresignedUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_presigned_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -284,7 +283,6 @@ class InfrastructureStack(Stack):
             self, "CreateSongFromS3Function",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="create_song_from_s3.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -293,7 +291,6 @@ class InfrastructureStack(Stack):
             self, "CreateAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="create_album.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -301,7 +298,6 @@ class InfrastructureStack(Stack):
             self, "ListAlbumsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="list_albums.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -309,7 +305,6 @@ class InfrastructureStack(Stack):
             self, "GetAlbumFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -322,14 +317,12 @@ class InfrastructureStack(Stack):
             environment=lambda_environment,
             role=lambda_role,
             runtime=_lambda.Runtime.PYTHON_3_11,
-            layers=[common_layer]
         )
 
         get_cover_url_fn = _lambda.Function(
             self, "GetCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_cover_url.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 
@@ -337,7 +330,6 @@ class InfrastructureStack(Stack):
             self, "GetAlbumSongsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "albums")),
             handler="get_album_songs.lambda_handler",
-            layers=[common_layer],
             **lambda_config
         )
 

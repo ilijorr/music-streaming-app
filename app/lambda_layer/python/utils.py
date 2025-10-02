@@ -2,12 +2,17 @@ import json
 import boto3
 import base64
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
+import os
+import mimetypes
 
 s3_client = boto3.client('s3')
 
 
-def generate_response(status_code: int, body: Any, headers: Optional[Dict] = None) -> Dict:
+def generate_response(
+        status_code: int,
+        body: Any,
+        headers: Optional[Dict] = None) -> Dict:
     """
     Generate standardized API Gateway response with CORS headers.
 
@@ -36,7 +41,9 @@ def generate_response(status_code: int, body: Any, headers: Optional[Dict] = Non
     }
 
 
-def validate_required_fields(data: Dict, required_fields: List[str]) -> Optional[str]:
+def validate_required_fields(
+        data: Dict,
+        required_fields: List[str]) -> Optional[str]:
     """
     Validate that all required fields are present and non-empty in the data.
 
@@ -62,7 +69,11 @@ def validate_required_fields(data: Dict, required_fields: List[str]) -> Optional
     return None
 
 
-def upload_to_s3(bucket: str, key: str, file_data: str, content_type: str) -> str:
+def upload_to_s3(
+        bucket: str,
+        key: str,
+        file_data: str,
+        content_type: str) -> str:
     """
     Upload base64-encoded file to S3.
 
@@ -94,7 +105,10 @@ def upload_to_s3(bucket: str, key: str, file_data: str, content_type: str) -> st
         raise Exception(f"Failed to upload to S3: {str(e)}")
 
 
-def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str:
+def generate_presigned_url(
+        bucket: str,
+        key: str,
+        expiration: int = 3600) -> str:
     """
     Generate presigned URL for S3 object access.
 
@@ -132,7 +146,8 @@ def get_user_groups(event: Dict) -> List[str]:
     """
     try:
         # Groups are in the authorizer context
-        claims = event.get('requestContext', {}).get('authorizer', {}).get('claims', {})
+        ctx = event.get('requestContext', {})
+        claims = ctx.get('authorizer', {}).get('claims', {})
 
         # Groups are stored as comma-separated string in 'cognito:groups'
         groups_str = claims.get('cognito:groups', '')
@@ -223,3 +238,54 @@ def get_query_parameter(event: Dict, param_name: str) -> Optional[str]:
     if query_params:
         return query_params.get(param_name)
     return None
+
+
+def extract_file_metadata(
+        file_base64: str,
+        filename: str = None) -> Dict[str, Any]:
+    """Extract metadata from base64 file data."""
+    try:
+        file_bytes = base64.b64decode(file_base64)
+        file_size = len(file_bytes)
+
+        # Get file type from content or filename
+        file_type = 'application/octet-stream'  # default
+        file_name = filename or 'unknown'
+
+        if filename:
+            file_type, _ = mimetypes.guess_type(filename)
+            if not file_type:
+                # Try to determine from extension
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ['.mp3', '.mpeg']:
+                    file_type = 'audio/mpeg'
+                elif ext in ['.wav']:
+                    file_type = 'audio/wav'
+                elif ext in ['.m4a']:
+                    file_type = 'audio/mp4'
+                elif ext in ['.jpg', '.jpeg']:
+                    file_type = 'image/jpeg'
+                elif ext in ['.png']:
+                    file_type = 'image/png'
+
+        # For uploaded files,
+        # we use current timestamp as creation/modification time
+        current_time = datetime.utcnow().isoformat() + 'Z'
+
+        return {
+            'file_name': file_name,
+            'file_type': file_type or 'application/octet-stream',
+            'file_size': file_size,
+            'file_created_at': current_time,
+            'file_modified_at': current_time
+        }
+    except Exception:
+        # Return basic metadata if extraction fails
+        current_time = datetime.utcnow().isoformat() + 'Z'
+        return {
+            'file_name': filename or 'unknown',
+            'file_type': 'application/octet-stream',
+            'file_size': 0,
+            'file_created_at': current_time,
+            'file_modified_at': current_time
+        }

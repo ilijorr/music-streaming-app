@@ -106,4 +106,15 @@ else
     exit 1
 fi
 
+CURRENT_DIR=$(pwd)
+cd ../frontend
+
+echo "Building Angular app..."
+ng build --configuration production
+
+echo "Deploying to S3..."
+aws s3 sync ../frontend/dist/frontend/browser/ s3://siitcloudfront/ --delete
+
+cd "$CURRENT_DIR"
+
 echo "Deployment completed successfully!"
