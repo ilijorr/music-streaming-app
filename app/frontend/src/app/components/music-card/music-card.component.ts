@@ -1,6 +1,6 @@
-import { Component, ChangeDetectionStrategy, input, output, signal, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, signal, computed, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SongData } from '../../services/song.service';
+import { SongData, SongService } from '../../services/song.service';
 
 @Component({
   selector: 'app-music-card',
@@ -10,14 +10,33 @@ import { SongData } from '../../services/song.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MusicCardComponent {
+  private readonly songService = inject(SongService);
+
   readonly content = input.required<SongData>();
   readonly onPlay = output<SongData>();
 
   protected readonly isPlaying = signal(false);
-  protected readonly coverImageUrl = computed(() => {
-    const content = this.content();
-    return content.coverUrl || null;
-  });
+  protected readonly coverImageUrl = signal<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const song = this.content();
+      if (song.coverUrl && song.coverUrl.startsWith('s3://')) {
+        // Load presigned URL for S3 cover
+        this.songService.getCoverImageUrl(song.songId).subscribe({
+          next: (response) => {
+            this.coverImageUrl.set(response.downloadUrl);
+          },
+          error: (error) => {
+            console.error('Error loading song cover image:', error);
+            this.coverImageUrl.set(null);
+          }
+        });
+      } else {
+        this.coverImageUrl.set(song.coverUrl || null);
+      }
+    });
+  }
 
   protected readonly fileSizeInMB = computed(() => {
     return (this.content().fileSize / 1024 / 1024).toFixed(2);

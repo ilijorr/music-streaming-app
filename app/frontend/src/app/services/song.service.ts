@@ -142,6 +142,13 @@ export class SongService {
   }
 
   /**
+   * Get presigned URL for song cover image
+   */
+  getCoverImageUrl(songId: string): Observable<{ downloadUrl: string }> {
+    return this.http.get<{ downloadUrl: string }>(`${this.apiUrl}songs/${songId}/cover-url`);
+  }
+
+  /**
    * Get audio duration from file
    */
   async getAudioDuration(file: File): Promise<number> {
