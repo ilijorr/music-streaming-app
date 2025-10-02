@@ -1,7 +1,8 @@
-import { Component, ChangeDetectionStrategy, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { debounceTime, distinctUntilChanged, Subject, takeUntil } from 'rxjs';
 import { MusicCardComponent } from '../music-card/music-card.component';
 import { AlbumCardComponent } from '../album-card/album-card.component';
 import { MusicContent } from '../../models/music-content.interface';
@@ -17,7 +18,8 @@ import { ArtistService } from '../../services/artist.service';
   styleUrl: './browse-music.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class BrowseMusicComponent implements OnInit {
+export class BrowseMusicComponent implements OnInit, OnDestroy {
+  private readonly destroy$ = new Subject<void>();
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly songService = inject(SongService);
@@ -29,17 +31,28 @@ export class BrowseMusicComponent implements OnInit {
   protected readonly albums = signal<AlbumResponse[]>([]);
   protected readonly loading = signal<boolean>(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly viewMode = signal<'songs' | 'albums'>('songs');
+  protected readonly viewMode = signal<'songs' | 'albums' | 'artists'>('songs');
   protected readonly selectedAlbum = signal<AlbumResponse | null>(null);
   protected readonly albumSongs = signal<SongData[]>([]);
+  protected readonly selectedArtistDetail = signal<{ id: string; name: string; genres: string[] } | null>(null);
+  protected readonly artistSongs = signal<SongData[]>([]);
+  protected readonly artistAlbums = signal<AlbumResponse[]>([]);
 
   protected readonly currentlyPlaying = signal<SongData | null>(null);
   protected readonly audioElement = signal<HTMLAudioElement | null>(null);
+
+  // Reactive filter values as signals
+  protected readonly searchTerm = signal<string>('');
+  protected readonly selectedGenre = signal<string>('');
+  protected readonly selectedArtistFilter = signal<string>('');
+  protected readonly selectedAlbumFilter = signal<string>('');
+  protected readonly fileType = signal<string>('');
 
   protected readonly filterForm: FormGroup = this.fb.group({
     searchTerm: [''],
     selectedGenre: [''],
     selectedArtist: [''],
+    selectedAlbum: [''],
     fileType: ['']
   });
 
@@ -56,6 +69,80 @@ export class BrowseMusicComponent implements OnInit {
 
     this.loadSongs();
     this.loadAlbums();
+    this.setupFilterSubscriptions();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Setup reactive subscriptions to form changes
+   * This makes filters work in real-time with performance optimizations
+   */
+  private setupFilterSubscriptions(): void {
+    // Search term with debouncing for performance
+    this.filterForm.get('searchTerm')?.valueChanges
+      .pipe(
+        debounceTime(300), // Wait 300ms after user stops typing
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.searchTerm.set(value || '');
+      });
+
+    // Genre filter - immediate update
+    this.filterForm.get('selectedGenre')?.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.selectedGenre.set(value || '');
+        // Clear artist and album when genre changes for cascading effect
+        if (value) {
+          this.filterForm.patchValue({ selectedArtist: '', selectedAlbum: '' }, { emitEvent: false });
+          this.selectedArtistFilter.set('');
+          this.selectedAlbumFilter.set('');
+        }
+      });
+
+    // Artist filter - immediate update
+    this.filterForm.get('selectedArtist')?.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.selectedArtistFilter.set(value || '');
+        // Clear album when artist changes for cascading effect
+        if (value) {
+          this.filterForm.patchValue({ selectedAlbum: '' }, { emitEvent: false });
+          this.selectedAlbumFilter.set('');
+        }
+      });
+
+    // Album filter - immediate update
+    this.filterForm.get('selectedAlbum')?.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.selectedAlbumFilter.set(value || '');
+      });
+
+    // File type filter - immediate update
+    this.filterForm.get('fileType')?.valueChanges
+      .pipe(
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.fileType.set(value || '');
+      });
   }
 
   /**
@@ -126,12 +213,16 @@ export class BrowseMusicComponent implements OnInit {
 
   protected readonly filteredContent = computed(() => {
     const content = this.songs();
-    const filters = this.filterForm.value;
+    const search = this.searchTerm();
+    const genre = this.selectedGenre();
+    const artist = this.selectedArtistFilter();
+    const album = this.selectedAlbumFilter();
+    const type = this.fileType();
 
     return content.filter(song => {
       // Search term filter
-      if (filters.searchTerm) {
-        const searchLower = filters.searchTerm.toLowerCase();
+      if (search) {
+        const searchLower = search.toLowerCase();
         const matchesTitle = song.title.toLowerCase().includes(searchLower);
         const matchesFileName = song.fileName.toLowerCase().includes(searchLower);
 
@@ -141,17 +232,22 @@ export class BrowseMusicComponent implements OnInit {
       }
 
       // Genre filter
-      if (filters.selectedGenre && !song.genres.includes(filters.selectedGenre)) {
+      if (genre && !song.genres.includes(genre)) {
         return false;
       }
 
       // Artist filter
-      if (filters.selectedArtist && !song.artistIds.includes(filters.selectedArtist)) {
+      if (artist && !song.artistIds.includes(artist)) {
+        return false;
+      }
+
+      // Album filter
+      if (album && song.albumId !== album) {
         return false;
       }
 
       // File type filter
-      if (filters.fileType && song.fileType !== filters.fileType) {
+      if (type && song.fileType !== type) {
         return false;
       }
 
@@ -163,12 +259,14 @@ export class BrowseMusicComponent implements OnInit {
 
   protected readonly filteredAlbums = computed(() => {
     const albumList = this.albums();
-    const filters = this.filterForm.value;
+    const search = this.searchTerm();
+    const genre = this.selectedGenre();
+    const artist = this.selectedArtistFilter();
 
     return albumList.filter(album => {
       // Search term filter
-      if (filters.searchTerm) {
-        const searchLower = filters.searchTerm.toLowerCase();
+      if (search) {
+        const searchLower = search.toLowerCase();
         const matchesTitle = album.title.toLowerCase().includes(searchLower);
 
         if (!matchesTitle) {
@@ -177,12 +275,12 @@ export class BrowseMusicComponent implements OnInit {
       }
 
       // Genre filter
-      if (filters.selectedGenre && !album.genres.includes(filters.selectedGenre)) {
+      if (genre && !album.genres.includes(genre)) {
         return false;
       }
 
       // Artist filter
-      if (filters.selectedArtist && !album.artistIds.includes(filters.selectedArtist)) {
+      if (artist && !album.artistIds.includes(artist)) {
         return false;
       }
 
@@ -195,8 +293,108 @@ export class BrowseMusicComponent implements OnInit {
   protected readonly currentUser = this.authService.currentUser;
   protected readonly isAdmin = computed(() => this.authService.isAdmin());
 
-  protected setViewMode(mode: 'songs' | 'albums'): void {
+  /**
+   * Filter artists by selected genre (cascading filter)
+   */
+  protected readonly filteredArtistsByGenre = computed(() => {
+    const genre = this.selectedGenre();
+    const artists = this.allArtists();
+
+    if (!genre) {
+      return artists;
+    }
+
+    // Filter artists that have songs in the selected genre
+    const artistIds = new Set<string>();
+    this.songs().forEach(song => {
+      if (song.genres.includes(genre)) {
+        song.artistIds.forEach(artistId => artistIds.add(artistId));
+      }
+    });
+
+    return artists.filter(artist => artistIds.has(artist.id));
+  });
+
+  /**
+   * Filter albums for dropdown (cascading filters by genre and artist)
+   */
+  protected readonly filteredAlbumsForDropdown = computed(() => {
+    const genre = this.selectedGenre();
+    const artist = this.selectedArtistFilter();
+    const albumList = this.albums();
+
+    return albumList.filter(album => {
+      // Genre filter
+      if (genre && !album.genres.includes(genre)) {
+        return false;
+      }
+
+      // Artist filter
+      if (artist && !album.artistIds.includes(artist)) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  /**
+   * Get all artists with additional metadata for artist view
+   */
+  protected readonly filteredArtists = computed(() => {
+    const search = this.searchTerm();
+    const genre = this.selectedGenre();
+    const artists = this.allArtists();
+    const songs = this.songs();
+    const albums = this.albums();
+
+    return artists
+      .filter(artist => {
+        // Search filter
+        if (search) {
+          const searchLower = search.toLowerCase();
+          if (!artist.name.toLowerCase().includes(searchLower)) {
+            return false;
+          }
+        }
+
+        // Genre filter - check if artist has any song in selected genre
+        if (genre) {
+          const hasGenre = songs.some(song =>
+            song.artistIds.includes(artist.id) && song.genres.includes(genre)
+          );
+          if (!hasGenre) {
+            return false;
+          }
+        }
+
+        return true;
+      })
+      .map(artist => {
+        const artistSongs = songs.filter(song => song.artistIds.includes(artist.id));
+        const artistAlbums = albums.filter(album => album.artistIds.includes(artist.id));
+        const genres = new Set<string>();
+        artistSongs.forEach(song => song.genres.forEach(genre => genres.add(genre)));
+
+        return {
+          id: artist.id,
+          name: artist.name,
+          genres: Array.from(genres),
+          songCount: artistSongs.length,
+          albumCount: artistAlbums.length
+        };
+      });
+  });
+
+  protected setViewMode(mode: 'songs' | 'albums' | 'artists'): void {
     this.viewMode.set(mode);
+    // Clear any selected detail views when switching modes
+    if (mode !== 'albums') {
+      this.closeAlbumView();
+    }
+    if (mode !== 'artists') {
+      this.closeArtistView();
+    }
   }
 
   protected async onPlayTrack(song: SongData): Promise<void> {
@@ -264,6 +462,12 @@ export class BrowseMusicComponent implements OnInit {
 
   protected clearFilters(): void {
     this.filterForm.reset();
+    // Manually reset all signal values
+    this.searchTerm.set('');
+    this.selectedGenre.set('');
+    this.selectedArtistFilter.set('');
+    this.selectedAlbumFilter.set('');
+    this.fileType.set('');
   }
 
   protected async logout(): Promise<void> {
@@ -309,5 +513,31 @@ export class BrowseMusicComponent implements OnInit {
   protected closeAlbumView(): void {
     this.selectedAlbum.set(null);
     this.albumSongs.set([]);
+  }
+
+  protected onViewArtist(artist: { id: string; name: string; genres: string[] }): void {
+    this.selectedArtistDetail.set(artist);
+    this.loading.set(true);
+
+    // Filter songs by artist
+    const artistSongsFiltered = this.songs().filter(song => song.artistIds.includes(artist.id));
+    this.artistSongs.set(artistSongsFiltered);
+
+    // Filter albums by artist
+    const artistAlbumsFiltered = this.albums().filter(album => album.artistIds.includes(artist.id));
+    this.artistAlbums.set(artistAlbumsFiltered);
+
+    this.loading.set(false);
+  }
+
+  protected closeArtistView(): void {
+    this.selectedArtistDetail.set(null);
+    this.artistSongs.set([]);
+    this.artistAlbums.set([]);
+  }
+
+  protected onViewAlbumFromArtist(album: AlbumResponse): void {
+    // When viewing album from artist page, just load the album songs
+    this.onViewAlbum(album);
   }
 }
