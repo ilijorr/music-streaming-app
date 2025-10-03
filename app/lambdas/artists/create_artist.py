@@ -9,7 +9,7 @@ from utils import (
     is_admin,
     parse_body,
 )
-from models import Artist
+from models.Artist import Artist
 
 # Environment variables
 TABLE_NAME = os.environ.get('TABLE_NAME')
