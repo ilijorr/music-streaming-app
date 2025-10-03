@@ -50,7 +50,7 @@
 
     <!-- Photo Upload -->
     <div class="form-group">
-      <label for="photo">Artist Photo *</label>
+      <label for="photo">Artist Photo</label>
       <input
         id="photo"
         type="file"
@@ -58,9 +58,6 @@
         class="form-control"
         (change)="onPhotoSelected($event)"
       />
-      @if (!selectedPhoto()) {
-        <div class="error-message">Please select a photo</div>
-      }
       @if (photoPreview()) {
         <div class="photo-preview">
           <img [src]="photoPreview()" alt="Artist photo preview" />
@@ -106,7 +103,7 @@
       <button
         type="submit"
         class="btn btn-primary"
-        [disabled]="artistForm.invalid || !selectedPhoto() || loading()"
+        [disabled]="artistForm.invalid || loading()"
       >
         {{ loading() ? 'Creating...' : 'Create Artist' }}
       </button>
