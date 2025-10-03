@@ -76,8 +76,8 @@ export class CreateArtistComponent {
   }
 
   protected async onSubmit(): Promise<void> {
-    if (!this.artistForm.valid || !this.selectedPhoto()) {
-      this.error.set('Please fill in all required fields and select a photo');
+    if (!this.artistForm.valid) {
+      this.error.set('Please fill in all required fields');
       return;
     }
 
@@ -87,10 +87,7 @@ export class CreateArtistComponent {
 
     try {
       const formValue = this.artistForm.value;
-      const photo = this.selectedPhoto()!;
-
-      // Convert photo to base64
-      const imageBase64 = await this.artistService.fileToBase64(photo);
+      const photo = this.selectedPhoto();
 
       // Prepare request payload
       const request: CreateArtistRequest = {
@@ -98,9 +95,13 @@ export class CreateArtistComponent {
         biography: formValue.biography.trim(),
         genres: formValue.genres
           .map((genre: string) => genre.trim())
-          .filter((genre: string) => genre.length > 0),
-        imageBase64
+          .filter((genre: string) => genre.length > 0)
       };
+
+      // Convert photo to base64 if selected
+      if (photo) {
+        request.imageBase64 = await this.artistService.fileToBase64(photo);
+      }
 
       // Call API
       this.artistService.createArtist(request).subscribe({
