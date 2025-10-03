@@ -73,7 +73,6 @@ class InfrastructureStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             point_in_time_recovery=False
         )
-
         # GSI1: Genre-Entity Index (for both artists AND albums)
         music_table.add_global_secondary_index(
             index_name="GenreEntityIndex",
@@ -228,6 +227,20 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        get_presigned_url_fn = _lambda.Function(
+            self, "GetPresignedSongUrlFunction",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="get_presigned_url.lambda_handler",
+            **lambda_config
+        )
+
+        create_song_from_s3_fn = _lambda.Function(
+            self, "CreateSongFromS3Function",
+            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
+            handler="create_song_from_s3.lambda_handler",
+            **lambda_config
+        )
+
         list_artists_fn = _lambda.Function(
             self, "ListArtistsFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
@@ -235,14 +248,15 @@ class InfrastructureStack(Stack):
             **lambda_config
         )
 
+        '''
+        # SONGS FUNCTIONS
+
         get_artist_fn = _lambda.Function(
             self, "GetArtistFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "artists")),
             handler="get_artist.lambda_handler",
             **lambda_config
         )
-
-        # SONGS FUNCTIONS
 
         list_songs_fn = _lambda.Function(
             self, "ListSongsFunction",
@@ -269,20 +283,6 @@ class InfrastructureStack(Stack):
             self, "GetSongCoverUrlFunction",
             code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
             handler="get_cover_url.lambda_handler",
-            **lambda_config
-        )
-
-        get_presigned_url_fn = _lambda.Function(
-            self, "GetPresignedUrlFunction",
-            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
-            handler="get_presigned_url.lambda_handler",
-            **lambda_config
-        )
-
-        create_song_from_s3_fn = _lambda.Function(
-            self, "CreateSongFromS3Function",
-            code=_lambda.Code.from_asset(os.path.join(lambdas_path, "songs")),
-            handler="create_song_from_s3.lambda_handler",
             **lambda_config
         )
 
@@ -332,6 +332,7 @@ class InfrastructureStack(Stack):
             handler="get_album_songs.lambda_handler",
             **lambda_config
         )
+        '''
 
         # ======================
         # API GATEWAY
@@ -375,6 +376,7 @@ class InfrastructureStack(Stack):
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
+
         artists.add_method(
             "GET",
             apigateway.LambdaIntegration(list_artists_fn),
@@ -382,6 +384,28 @@ class InfrastructureStack(Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
 
+        # /songs
+        songs = api.root.add_resource("songs")
+
+        # /songs/presigned-url
+        presigned_url = songs.add_resource("presigned-url")
+        presigned_url.add_method(
+            "POST",
+            apigateway.LambdaIntegration(get_presigned_url_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # /songs/from-s3
+        from_s3 = songs.add_resource("from-s3")
+        from_s3.add_method(
+            "POST",
+            apigateway.LambdaIntegration(create_song_from_s3_fn),
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        '''
         # /artists/{id}
         artist_id = artists.add_resource("{id}")
         artist_id.add_method(
@@ -391,8 +415,6 @@ class InfrastructureStack(Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
 
-        # /songs
-        songs = api.root.add_resource("songs")
         songs.add_method(
             "GET",
             apigateway.LambdaIntegration(list_songs_fn),
@@ -423,24 +445,6 @@ class InfrastructureStack(Stack):
         song_cover_url.add_method(
             "GET",
             apigateway.LambdaIntegration(get_song_cover_url_fn),
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO
-        )
-
-        # /songs/presigned-url
-        presigned_url = songs.add_resource("presigned-url")
-        presigned_url.add_method(
-            "POST",
-            apigateway.LambdaIntegration(get_presigned_url_fn),
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO
-        )
-
-        # /songs/from-s3
-        from_s3 = songs.add_resource("from-s3")
-        from_s3.add_method(
-            "POST",
-            apigateway.LambdaIntegration(create_song_from_s3_fn),
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
@@ -495,6 +499,7 @@ class InfrastructureStack(Stack):
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
+        '''
 
         # ======================
         # GATEWAY RESPONSES FOR CORS
