@@ -84,6 +84,7 @@ export class BrowseMusicComponent implements OnInit {
     this.artistService.listArtists().subscribe({
       next: () => {
         console.log('Artists loaded and cached');
+        console.log(this.artistService.listArtists())
       },
       error: (error) => {
         console.error('Error loading artists:', error);

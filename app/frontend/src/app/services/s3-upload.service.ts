@@ -39,7 +39,7 @@ export class S3UploadService {
   private readonly configService = inject(ConfigService);
 
   private get apiUrl(): string {
-    return `${this.configService.getApiUrl()}/songs/presigned-url`;
+    return `${this.configService.getApiUrl()}songs/presigned-url`;
   }
 
   /**

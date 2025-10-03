@@ -40,7 +40,7 @@ def lambda_handler(event, context):
             })
 
     # Validate required fields
-        required_fields = ['filename', 'file_type']
+        required_fields = ['fileName', 'fileType']
         validation_error = validate_required_fields(body, required_fields)
         if validation_error:
             return generate_response(400, {
@@ -48,8 +48,8 @@ def lambda_handler(event, context):
                 'message': validation_error
             })
 
-        filename = body['filename']
-        file_type = body['file_type']
+        filename = body['fileName']
+        file_type = body['fileType']
 
         allowed_audio_types = [
                 'audio/mpeg',
@@ -68,18 +68,22 @@ def lambda_handler(event, context):
         s3_key = f"songs/{song_id}/{filename}"
 
         # Generate presigned URL for upload (valid for 1 hour)
-        # Note: Using put_object for upload (not get_object)
-        presigned_url = generate_presigned_url(
-            bucket=BUCKET_NAME,
-            key=s3_key,
-            expiration=3600
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': BUCKET_NAME,
+                'Key': s3_key,
+                'ContentType': file_type
+            },
+            ExpiresIn=3600
         )
 
         return generate_response(200, {
-            'upload_url': presigned_url,
-            'song_id': song_id,
-            's3_key': s3_key,
-            'expires_in': 3600
+            'uploadUrl': presigned_url,
+            'key': s3_key,
+            'fileId': song_id,
+            'expiresIn': 3600,
+            'fields': {}  # For POST form uploads, but we're using PUT
         })
 
     except Exception as e:
