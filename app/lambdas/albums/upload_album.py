@@ -170,33 +170,53 @@ def handler(event, context):
             except Exception as e:
                 return generate_response(400, {"error": f"Failed to upload song {i+1}: {str(e)}"})
 
-        # Save album to DynamoDB with GSI attributes
+        # Save main album item to DynamoDB
         album_item = album.to_dynamodb_item()
+        albums_table.put_item(Item=album_item)
 
-        # Add GSI attributes for filtering
-        # Artist GSI
+        # Create genre index entries for each genre using proper GSI structure
+        for genre in body['genres']:
+            # Normalize genre for consistent querying
+            normalized_genre = genre.upper().replace(' ', '_')
+            
+            # Create genre index item with proper GSI attributes
+            genre_item = {
+                'PK': album_item['PK'],  # Keep original PK
+                'SK': album_item['SK'],  # Keep original SK
+                'GSI2PK': f"GENRE#{normalized_genre}",
+                'GSI2SK': f"ALBUM#{album_id}",
+                'album_id': album_id,
+                'title': body['title'],
+                'artist_ids': body['artist_ids'],
+                'release_date': body['release_date'],
+                'genres': body['genres'],
+                'cover_url': cover_url,
+                'created_at': album_item['created_at'],
+                'updated_at': album_item['updated_at'],
+                'entity_type': 'ALBUM_GENRE_INDEX'
+            }
+            
+            # Put genre index item
+            albums_table.put_item(Item=genre_item)
+
+        # Create artist index entries (keeping your existing logic)
         for artist_id in body['artist_ids']:
             artist_item = {
-                **album_item,
+                'PK': album_item['PK'],
+                'SK': album_item['SK'],
                 'GSI1PK': f"ARTIST#{artist_id}",
-                'GSI1SK': f"ALBUM#{album_id}"
+                'GSI1SK': f"ALBUM#{album_id}",
+                'album_id': album_id,
+                'title': body['title'],
+                'artist_ids': body['artist_ids'],
+                'release_date': body['release_date'],
+                'genres': body['genres'],
+                'cover_url': cover_url,
+                'created_at': album_item['created_at'],
+                'updated_at': album_item['updated_at'],
+                'entity_type': 'ALBUM_ARTIST_INDEX'
             }
             albums_table.put_item(Item=artist_item)
-            break
-
-        # Genre GSI
-        for genre in body['genres']:
-            genre_item = {
-                **album_item,
-                'GSI2PK': f"GENRE#{genre}",
-                'GSI2SK': f"ALBUM#{album_id}"
-            }
-            albums_table.put_item(Item=genre_item)
-            break
-
-        # Store main item if minimal GSI usage
-        if len(body['artist_ids']) <= 1 and len(body['genres']) <= 1:
-            albums_table.put_item(Item=album_item)
 
         # Send notifications to subscribers
         try:

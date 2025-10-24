@@ -67,22 +67,33 @@ def handler(event, context):
             image_url=image_url
         )
 
-        # Save to DynamoDB
+        # Save main artist item to DynamoDB
         item = artist.to_dynamodb_item()
+        artists_table.put_item(Item=item)
 
-        # Add GSI attributes for genre filtering
+        # Create genre index entries for each genre using GSI attributes
         for genre in body['genres']:
+            # Normalize genre for consistent querying
+            normalized_genre = genre.upper().replace(' ', '_')
+            
+            # Create genre index item with GSI attributes
             genre_item = {
-                **item,
-                'GSI1PK': f"GENRE#{genre}",
-                'GSI1SK': f"ARTIST#{artist_id}"
+                'PK': item['PK'],  # Keep original PK for main table
+                'SK': item['SK'],  # Keep original SK for main table
+                'GSI1PK': f"GENRE#{normalized_genre}",
+                'GSI1SK': f"ARTIST#{artist_id}",
+                'artist_id': artist_id,
+                'name': body['name'],
+                'biography': body['biography'],
+                'genres': body['genres'],
+                'image_url': image_url,
+                'created_at': item['created_at'],
+                'updated_at': item['updated_at'],
+                'entity_type': 'ARTIST_GENRE_INDEX'
             }
+            
+            # Put genre index item
             artists_table.put_item(Item=genre_item)
-            break  # Only store in one genre GSI for simplicity
-
-        # If no genres or only one genre, store the main item
-        if len(body['genres']) <= 1:
-            artists_table.put_item(Item=item)
 
         return generate_response(201, {
             "message": "Artist created successfully",

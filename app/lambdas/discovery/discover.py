@@ -25,12 +25,16 @@ def handler(event, context):
         if not genre:
             return generate_response(400, {"error": "Genre parameter is required"})
 
+        # Normalize genre to match how it's stored in the index
+        normalized_genre = genre.upper().replace(' ', '_')
+
         # Get optional parameters
         content_type = get_query_parameter(event, 'type') or 'all'
         limit = int(get_query_parameter(event, 'limit') or '20')
 
         result = {
             "genre": genre,
+            "normalized_genre": normalized_genre,  # For debugging
             "content_type": content_type
         }
 
@@ -39,7 +43,7 @@ def handler(event, context):
             try:
                 artists_response = artists_table.query(
                     IndexName='GenreIndex',
-                    KeyConditionExpression=Key('GSI1PK').eq(f"GENRE#{genre}"),
+                    KeyConditionExpression=Key('GSI1PK').eq(f"GENRE#{normalized_genre}"),
                     ScanIndexForward=True,
                     Limit=limit
                 )
@@ -47,8 +51,27 @@ def handler(event, context):
                 artists = []
                 for item in artists_response.get('Items', []):
                     try:
-                        artist = Artist.from_dynamodb_item(item)
-                        artists.append(artist.to_dict())
+                        # For genre index items, we need to get the full artist data
+                        # Either use the data already in the index item, or fetch the main item
+                        if 'artist_id' in item:
+                            # This is a genre index item with artist data
+                            artist = Artist(
+                                artist_id=item['artist_id'],
+                                name=item['name'],
+                                biography=item.get('biography', ''),
+                                genres=item.get('genres', []),
+                                image_url=item.get('image_url')
+                            )
+                            artists.append(artist.to_dict())
+                        else:
+                            # Fallback: fetch the main artist item
+                            artist_id = item['SK'].replace('ARTIST#', '')
+                            main_item = artists_table.get_item(
+                                Key={'PK': f'ARTIST#{artist_id}', 'SK': f'ARTIST#{artist_id}'}
+                            ).get('Item')
+                            if main_item:
+                                artist = Artist.from_dynamodb_item(main_item)
+                                artists.append(artist.to_dict())
                     except Exception as e:
                         print(f"Error converting artist item: {str(e)}")
                         continue
@@ -66,7 +89,7 @@ def handler(event, context):
             try:
                 albums_response = albums_table.query(
                     IndexName='GenreIndex',
-                    KeyConditionExpression=Key('GSI2PK').eq(f"GENRE#{genre}"),
+                    KeyConditionExpression=Key('GSI2PK').eq(f"GENRE#{normalized_genre}"),
                     ScanIndexForward=True,
                     Limit=limit
                 )
@@ -93,7 +116,7 @@ def handler(event, context):
             try:
                 songs_response = songs_table.query(
                     IndexName='GenreIndex',
-                    KeyConditionExpression=Key('GSI2PK').eq(f"GENRE#{genre}"),
+                    KeyConditionExpression=Key('GSI2PK').eq(f"GENRE#{normalized_genre}"),
                     ScanIndexForward=True,
                     Limit=limit
                 )
