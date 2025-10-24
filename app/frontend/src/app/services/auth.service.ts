@@ -1,50 +1,47 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Amplify } from 'aws-amplify';
-import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resendSignUpCode, fetchUserAttributes } from '@aws-amplify/auth';
-import { fetchAuthSession } from '@aws-amplify/auth';
+import { getCurrentUser, signIn, signUp, signOut, confirmSignUp, fetchAuthSession } from 'aws-amplify/auth';
+import { BehaviorSubject, Observable, from, map, catchError, of } from 'rxjs';
+import { User, LoginRequest, RegisterRequest } from '../models';
 import { ConfigService } from './config.service';
-
-export interface User {
-  userId: string;
-  username: string;
-  email?: string;
-  givenName?: string;
-  familyName?: string;
-  birthdate?: string;
-  groups?: string[];
-}
-
-export interface SignUpData {
-  username: string;
-  password: string;
-  email: string;
-  givenName: string;
-  familyName: string;
-  birthdate: string;
-}
-
-export interface SignInData {
-  username: string;
-  password: string;
-}
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly configService = inject(ConfigService);
+  private router = inject(Router);
+  private configService = inject(ConfigService);
 
-  readonly isAuthenticated = signal(false);
-  readonly currentUser = signal<User | null>(null);
-  readonly isLoading = signal(false);
+  private currentUserSubject = new BehaviorSubject<User | null>(null);
+  public currentUser$ = this.currentUserSubject.asObservable();
+
+  // Signal for reactive templates
+  public isAuthenticated = signal(false);
+  public isAdmin = signal(false);
+  public currentUser = signal<User | null>(null);
 
   constructor() {
-    this.initializeAmplify();
-    this.checkAuthStatus();
+    // Initialize after config is loaded
   }
 
-  private initializeAmplify(): void {
+  initializeWithConfig(): void {
+    this.initializeAmplify();
+    this.checkAuthState();
+  }
+
+  private initializeAmplify() {
     const cognitoConfig = this.configService.getCognitoConfig();
+    if (!cognitoConfig) {
+      console.error('Cognito configuration not available');
+      return;
+    }
+
+    console.log('Initializing Amplify with config:', {
+      userPoolId: cognitoConfig.userPoolId,
+      userPoolClientId: cognitoConfig.userPoolClientId,
+      region: cognitoConfig.region
+    });
 
     Amplify.configure({
       Auth: {
@@ -60,146 +57,145 @@ export class AuthService {
     });
   }
 
-  private async checkAuthStatus(): Promise<void> {
+  private async checkAuthState() {
     try {
-      this.isLoading.set(true);
       const user = await getCurrentUser();
-      const attributes = await fetchUserAttributes();
       const session = await fetchAuthSession();
 
-      // Extract groups from JWT token
-      const groups = this.extractGroupsFromToken(session);
-
-      this.currentUser.set({
-        userId: user.userId,
-        username: user.username,
-        email: attributes.email,
-        givenName: attributes.given_name,
-        familyName: attributes.family_name,
-        birthdate: attributes.birthdate,
-        groups: groups
-      });
-      this.isAuthenticated.set(true);
-
-      console.log('User is authenticated:', user, 'Attributes:', attributes, 'Groups:', groups);
-    } catch (error) {
-      console.log('User is not authenticated');
-      this.isAuthenticated.set(false);
-      this.currentUser.set(null);
-    } finally {
-      this.isLoading.set(false);
-    }
-  }
-
-  private extractGroupsFromToken(session: any): string[] {
-    try {
-      const accessToken = session.tokens?.accessToken?.payload;
-      return accessToken?.['cognito:groups'] || [];
-    } catch (error) {
-      console.warn('Could not extract groups from token:', error);
-      return [];
-    }
-  }
-
-  async signUp(signUpData: SignUpData): Promise<{ isSignUpComplete: boolean; nextStep?: any }> {
-    try {
-      this.isLoading.set(true);
-
-      const { isSignUpComplete, nextStep } = await signUp({
-        username: signUpData.username,
-        password: signUpData.password,
-        options: {
-          userAttributes: {
-            email: signUpData.email,
-            given_name: signUpData.givenName,
-            family_name: signUpData.familyName,
-            birthdate: signUpData.birthdate
-          }
-        }
-      });
-
-      return { isSignUpComplete, nextStep };
-    } catch (error) {
-      console.error('Sign up error:', error);
-      throw error;
-    } finally {
-      this.isLoading.set(false);
-    }
-  }
-
-  async confirmSignUp(username: string, confirmationCode: string): Promise<void> {
-    try {
-      this.isLoading.set(true);
-      await confirmSignUp({
-        username,
-        confirmationCode
-      });
-    } catch (error) {
-      console.error('Confirmation error:', error);
-      throw error;
-    } finally {
-      this.isLoading.set(false);
-    }
-  }
-
-  async resendConfirmationCode(username: string): Promise<void> {
-    try {
-      await resendSignUpCode({ username });
-    } catch (error) {
-      console.error('Resend confirmation error:', error);
-      throw error;
-    }
-  }
-
-  async signIn(signInData: SignInData): Promise<void> {
-    try {
-      this.isLoading.set(true);
-
-      const { isSignedIn } = await signIn({
-        username: signInData.username,
-        password: signInData.password
-      });
-
-      if (isSignedIn) {
-        await this.checkAuthStatus();
+      if (user && session.tokens) {
+        const userData = await this.buildUserFromCognito(user, session.tokens);
+        this.updateUserState(userData);
       }
     } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    } finally {
-      this.isLoading.set(false);
+      console.log('No authenticated user');
+      this.updateUserState(null);
     }
   }
 
-  async signOut(): Promise<void> {
-    try {
-      this.isLoading.set(true);
-      await signOut();
-      this.isAuthenticated.set(false);
-      this.currentUser.set(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    } finally {
-      this.isLoading.set(false);
-    }
+  private async buildUserFromCognito(cognitoUser: any, tokens: any): Promise<User> {
+    const claims = tokens.idToken?.payload || {};
+    const groups = claims['cognito:groups'] || [];
+
+    return {
+      userId: cognitoUser.userId,
+      username: cognitoUser.username,
+      email: claims.email || '',
+      given_name: claims.given_name || '',
+      family_name: claims.family_name || '',
+      birthdate: claims.birthdate || '',
+      groups: groups,
+      isAdmin: groups.includes('Admins')
+    };
   }
 
-  async getAccessToken(): Promise<string | null> {
+  private updateUserState(user: User | null) {
+    this.currentUserSubject.next(user);
+    this.currentUser.set(user);
+    this.isAuthenticated.set(!!user);
+    this.isAdmin.set(user?.isAdmin || false);
+  }
+
+  login(credentials: LoginRequest): Observable<User> {
+    return from(
+      signIn({
+        username: credentials.username,
+        password: credentials.password
+      }).then(async (result) => {
+        if (result.isSignedIn) {
+          const user = await getCurrentUser();
+          const session = await fetchAuthSession();
+          const userData = await this.buildUserFromCognito(user, session.tokens);
+          this.updateUserState(userData);
+          return userData;
+        } else {
+          throw new Error('Sign in incomplete');
+        }
+      })
+    ).pipe(
+      catchError((error) => {
+        console.error('Login error:', error);
+        throw error;
+      })
+    );
+  }
+
+  register(userData: RegisterRequest): Observable<any> {
+    console.log('Attempting registration for user:', userData.username);
+    console.log('Current Cognito config:', this.configService.getCognitoConfig());
+
+    return from(signUp({
+      username: userData.username,
+      password: userData.password,
+      options: {
+        userAttributes: {
+          email: userData.email,
+          given_name: userData.given_name,
+          family_name: userData.family_name,
+          birthdate: userData.birthdate
+        }
+      }
+    })).pipe(
+      catchError((error) => {
+        console.error('Registration error details:', {
+          error: error,
+          message: error.message,
+          code: error.code,
+          name: error.name
+        });
+        throw error;
+      })
+    );
+  }
+
+  confirmRegistration(username: string, code: string): Observable<any> {
+    return from(confirmSignUp({
+      username: username,
+      confirmationCode: code
+    }));
+  }
+
+  logout(): Observable<void> {
+    return from(signOut()).pipe(
+      map(() => {
+        this.updateUserState(null);
+        this.router.navigate(['/login']);
+      }),
+      catchError((error) => {
+        console.error('Logout error:', error);
+        // Clear state even if logout fails
+        this.updateUserState(null);
+        this.router.navigate(['/login']);
+        return of(undefined);
+      })
+    );
+  }
+
+  async getAuthToken(): Promise<string | null> {
     try {
-      const user = await getCurrentUser();
-      return user.signInDetails?.loginId || null;
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+      console.log('Getting auth token:', {
+        hasIdToken: !!idToken,
+        hasAccessToken: !!session.tokens?.accessToken,
+        tokenPreview: idToken ? idToken.substring(0, 50) + '...' : 'none'
+      });
+      return idToken || null;
     } catch (error) {
+      console.error('Error getting auth token:', error);
       return null;
     }
   }
 
-  isUserInGroup(groupName: string): boolean {
-    const user = this.currentUser();
-    return user?.groups?.includes(groupName) || false;
+  // Helper methods
+  isUserAuthenticated(): boolean {
+    return this.isAuthenticated();
   }
 
-  isAdmin(): boolean {
-    return this.isUserInGroup('Admins');
+  isUserAdmin(): boolean {
+    return this.isAdmin();
+  }
+
+  getCurrentUser(): User | null {
+    return this.currentUser();
   }
 }

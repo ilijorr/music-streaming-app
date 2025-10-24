@@ -40,15 +40,27 @@ USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
     --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientId'].OutputValue" \
     --output text)
 
-BUCKET_NAME=$(aws cloudformation describe-stacks \
+MEDIA_BUCKET_NAME=$(aws cloudformation describe-stacks \
     --stack-name InfrastructureStack \
-    --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+    --query "Stacks[0].Outputs[?OutputKey=='S3MediaBucketName'].OutputValue" \
+    --output text)
+
+IMAGES_BUCKET_NAME=$(aws cloudformation describe-stacks \
+    --stack-name InfrastructureStack \
+    --query "Stacks[0].Outputs[?OutputKey=='S3ImagesBucketName'].OutputValue" \
+    --output text)
+
+AWS_REGION=$(aws cloudformation describe-stacks \
+    --stack-name InfrastructureStack \
+    --query "Stacks[0].Outputs[?OutputKey=='AWSRegion'].OutputValue" \
     --output text)
 
 echo "API URL: $API_URL"
 echo "User Pool ID: $USER_POOL_ID"
 echo "User Pool Client ID: $USER_POOL_CLIENT_ID"
-echo "S3 Bucket Name: $BUCKET_NAME"
+echo "Media Bucket Name: $MEDIA_BUCKET_NAME"
+echo "Images Bucket Name: $IMAGES_BUCKET_NAME"
+echo "AWS Region: $AWS_REGION"
 
 # Define the frontend config path
 FRONTEND_CONFIG_PATH="../frontend/src/assets/config.json"
@@ -63,11 +75,12 @@ cat > "$FRONTEND_CONFIG_PATH" << EOF
   "cognito": {
     "userPoolId": "$USER_POOL_ID",
     "userPoolClientId": "$USER_POOL_CLIENT_ID",
-    "region": "$(echo $USER_POOL_ID | cut -d'_' -f1)"
+    "region": "$AWS_REGION"
   },
   "s3": {
-    "bucketName": "$BUCKET_NAME",
-    "region": "$(echo $USER_POOL_ID | cut -d'_' -f1)"
+    "mediaBucketName": "$MEDIA_BUCKET_NAME",
+    "imagesBucketName": "$IMAGES_BUCKET_NAME",
+    "region": "$AWS_REGION"
   },
   "allowedAudioFormats": [
     "audio/mpeg",

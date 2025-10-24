@@ -4,6 +4,30 @@ import os
 import base64
 import mimetypes
 
+# Import utils but handle circular imports
+try:
+    from utils import generate_presigned_url
+except ImportError:
+    generate_presigned_url = None
+
+
+def _convert_s3_to_presigned_url(s3_url: str) -> str:
+    """Convert S3 URL to presigned URL for frontend access."""
+    if not s3_url or not generate_presigned_url:
+        return s3_url
+
+    try:
+        if s3_url.startswith('s3://'):
+            # Extract bucket and key from s3://bucket/key format
+            parts = s3_url.replace('s3://', '').split('/', 1)
+            if len(parts) == 2:
+                bucket, key = parts
+                return generate_presigned_url(bucket, key, 3600)  # 1 hour expiration
+    except Exception as e:
+        print(f"Error converting S3 URL to presigned URL: {str(e)}")
+
+    return s3_url
+
 
 def extract_file_metadata(file_base64: str, filename: str = None) -> Dict[str, Any]:
     """Extract metadata from base64 file data."""
@@ -81,7 +105,7 @@ class Artist:
             'name': self.name,
             'biography': self.biography,
             'genres': self.genres,
-            'imageUrl': self.image_url,
+            'imageUrl': _convert_s3_to_presigned_url(self.image_url) if self.image_url else None,
             'createdAt': self.created_at,
             'updatedAt': self.updated_at
         }
@@ -180,7 +204,7 @@ class Song:
         if self.album_id:
             result['albumId'] = self.album_id
         if self.cover_url:
-            result['coverUrl'] = self.cover_url
+            result['coverUrl'] = _convert_s3_to_presigned_url(self.cover_url)
         if self.duration:
             result['duration'] = self.duration
         if self.stream_url:
@@ -325,7 +349,7 @@ class Album:
         }
 
         if self.cover_url:
-            result['coverUrl'] = self.cover_url
+            result['coverUrl'] = _convert_s3_to_presigned_url(self.cover_url)
 
         if self.songs:
             result['songs'] = self.songs

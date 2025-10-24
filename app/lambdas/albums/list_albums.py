@@ -1,75 +1,63 @@
 import os
-import json
 import boto3
 from boto3.dynamodb.conditions import Key
-from utils import generate_response
+from utils import generate_response, get_query_parameter
+from models import Album
 
-# Environment variables
-TABLE_NAME = os.environ.get('TABLE_NAME')
-
-# AWS clients
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table(TABLE_NAME)
+albums_table = dynamodb.Table(os.environ['ALBUMS_TABLE'])
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     """
-    List all albums.
-
-    GET /albums
+    List all albums or filter by artist or genre
     """
-    print(f"Received event: {json.dumps(event)}")
-
     try:
-        # Query all albums from DynamoDB
-        # Albums are stored with PK="ALBUM#{albumId}" and SK="METADATA"
-        response = table.scan(
-            FilterExpression='begins_with(PK, :pk_prefix) AND SK = :sk',
-            ExpressionAttributeValues={
-                ':pk_prefix': 'ALBUM#',
-                ':sk': 'METADATA'
-            }
-        )
+        # Check for filter parameters
+        artist_id = get_query_parameter(event, 'artist_id')
+        genre = get_query_parameter(event, 'genre')
 
-        albums = response.get('Items', [])
-
-        # Handle pagination if there are more items
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(
-                FilterExpression='begins_with(PK, :pk_prefix) AND SK = :sk',
-                ExpressionAttributeValues={
-                    ':pk_prefix': 'ALBUM#',
-                    ':sk': 'METADATA'
-                },
-                ExclusiveStartKey=response['LastEvaluatedKey']
+        if artist_id:
+            # Filter by artist using GSI
+            response = albums_table.query(
+                IndexName='ArtistIndex',
+                KeyConditionExpression=Key('GSI1PK').eq(f"ARTIST#{artist_id}"),
+                ScanIndexForward=True,
+                Limit=50
             )
-            albums.extend(response.get('Items', []))
+        elif genre:
+            # Filter by genre using GSI
+            response = albums_table.query(
+                IndexName='GenreIndex',
+                KeyConditionExpression=Key('GSI2PK').eq(f"GENRE#{genre}"),
+                ScanIndexForward=True,
+                Limit=50
+            )
+        else:
+            # Get all albums
+            response = albums_table.scan(
+                FilterExpression='SK = :metadata',
+                ExpressionAttributeValues={
+                    ':metadata': 'METADATA'
+                },
+                Limit=50
+            )
 
-        print(f"Found {len(albums)} albums")
-
-        # Clean up the response - remove DynamoDB keys
-        cleaned_albums = []
-        for album in albums:
-            cleaned_album = {
-                'albumId': album.get('albumId'),
-                'title': album.get('title'),
-                'artistIds': album.get('artistIds', []),
-                'releaseDate': album.get('releaseDate'),
-                'genres': album.get('genres', []),
-                'coverUrl': album.get('coverUrl'),
-                'createdAt': album.get('createdAt'),
-                'updatedAt': album.get('updatedAt')
-            }
-            cleaned_albums.append(cleaned_album)
+        # Convert DynamoDB items to Album objects
+        albums = []
+        for item in response.get('Items', []):
+            try:
+                album = Album.from_dynamodb_item(item)
+                albums.append(album.to_dict())
+            except Exception as e:
+                print(f"Error converting album item: {str(e)}")
+                continue
 
         return generate_response(200, {
-            'albums': cleaned_albums,
-            'count': len(cleaned_albums)
+            "albums": albums,
+            "count": len(albums)
         })
 
     except Exception as e:
         print(f"Error listing albums: {str(e)}")
-        return generate_response(500, {
-            'error': 'Internal Server Error',
-            'message': str(e)
-        })
+        return generate_response(500, {"error": "Internal server error"})

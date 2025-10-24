@@ -1,6 +1,7 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Observable, BehaviorSubject } from 'rxjs';
+import { tap } from 'rxjs/operators';
 
 export interface AppConfig {
   apiUrl: string;
@@ -10,7 +11,8 @@ export interface AppConfig {
     region: string;
   };
   s3: {
-    bucketName: string;
+    mediaBucketName: string;
+    imagesBucketName: string;
     region: string;
   };
   allowedAudioFormats: string[];
@@ -21,82 +23,47 @@ export interface AppConfig {
   providedIn: 'root'
 })
 export class ConfigService {
-  private readonly http = inject(HttpClient);
-  private config!: AppConfig;
+  private configSubject = new BehaviorSubject<AppConfig | null>(null);
+  public config$ = this.configSubject.asObservable();
 
-  async loadConfig(): Promise<void> {
-    try {
-      this.config = await firstValueFrom(
-        this.http.get<AppConfig>('/assets/config.json')
-      );
-      console.log('Config loaded successfully:', this.config);
-    } catch (error) {
-      console.error('Failed to load config.json!', error);
-      console.error('Make sure the config.json file exists in src/assets/ directory');
-      console.error('You can generate it by running the deployment script: deploy.bat or deploy.sh');
+  constructor(private http: HttpClient) {}
 
-      // Use a fallback config for development if config.json is not available
-      console.warn('Using fallback development config');
-      this.config = {
-        apiUrl: 'http://localhost:3000/dev',
-        cognito: {
-          userPoolId: 'PLACEHOLDER',
-          userPoolClientId: 'PLACEHOLDER',
-          region: 'eu-central-1'
-        },
-        s3: {
-          bucketName: 'PLACEHOLDER',
-          region: 'eu-central-1'
-        },
-        allowedAudioFormats: [
-          'audio/mpeg',
-          'audio/mp3',
-          'audio/wav',
-          'audio/flac',
-          'audio/m4a',
-          'audio/ogg',
-          'audio/aac'
-        ],
-        allowedAudioExtensions: [
-          '.mp3',
-          '.wav',
-          '.flac',
-          '.m4a',
-          '.ogg',
-          '.aac'
-        ]
-      };
-    }
+  loadConfig(): Observable<AppConfig> {
+    return this.http.get<AppConfig>('/assets/config.json').pipe(
+      tap(config => {
+        this.configSubject.next(config);
+      })
+    );
   }
 
-  isConfigLoaded(): boolean {
-    return !!this.config;
-  }
-
-  get(): AppConfig {
-    if (!this.config) {
-      throw new Error('Config not loaded. Make sure ConfigService.loadConfig() is called during app initialization.');
-    }
-    return this.config;
+  getConfig(): AppConfig | null {
+    return this.configSubject.value;
   }
 
   getApiUrl(): string {
-    return this.get().apiUrl;
+    const config = this.getConfig();
+    const apiUrl = config?.apiUrl || '';
+    // Remove trailing slash to prevent double slashes when constructing endpoints
+    return apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
   }
 
-  getCognitoConfig() {
-    return this.get().cognito;
+  getCognitoConfig(): AppConfig['cognito'] | null {
+    const config = this.getConfig();
+    return config?.cognito || null;
   }
 
-  getS3Config() {
-    return this.get().s3;
+  getS3Config(): AppConfig['s3'] | null {
+    const config = this.getConfig();
+    return config?.s3 || null;
   }
 
   getAllowedAudioFormats(): string[] {
-    return this.get().allowedAudioFormats;
+    const config = this.getConfig();
+    return config?.allowedAudioFormats || [];
   }
 
   getAllowedAudioExtensions(): string[] {
-    return this.get().allowedAudioExtensions;
+    const config = this.getConfig();
+    return config?.allowedAudioExtensions || [];
   }
 }

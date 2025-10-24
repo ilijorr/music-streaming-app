@@ -1,50 +1,85 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard } from './guards/auth.guard';
-import { adminGuard } from './guards/admin.guard';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from './services/auth.service';
+
+// Route Guards
+const authGuard = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isUserAuthenticated()) {
+    return true;
+  } else {
+    router.navigate(['/login']);
+    return false;
+  }
+};
+
+const adminGuard = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isUserAuthenticated() && authService.isUserAdmin()) {
+    return true;
+  } else {
+    router.navigate(['/']);
+    return false;
+  }
+};
+
+const guestGuard = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (!authService.isUserAuthenticated()) {
+    return true;
+  } else {
+    router.navigate(['/']);
+    return false;
+  }
+};
 
 export const routes: Routes = [
-  // Auth routes (accessible only when not authenticated)
+  // Public routes (guest only)
   {
-    path: 'auth/login',
+    path: 'login',
     loadComponent: () => import('./components/auth/login.component').then(m => m.LoginComponent),
     canActivate: [guestGuard]
   },
   {
-    path: 'auth/register',
+    path: 'register',
     loadComponent: () => import('./components/auth/register.component').then(m => m.RegisterComponent),
     canActivate: [guestGuard]
   },
 
-  // Protected routes (require authentication)
+  // Protected routes (authenticated users)
   {
-    path: 'artists/create',
-    loadComponent: () => import('./components/create-artist/create-artist.component').then(m => m.CreateArtistComponent),
-    canActivate: [adminGuard]
-  },
-  {
-    path: 'music/upload',
-    loadComponent: () => import('./components/upload-music/upload-music.component').then(m => m.UploadMusicComponent),
-    canActivate: [adminGuard]
-  },
-  {
-    path: 'music/browse',
-    loadComponent: () => import('./components/browse-music/browse-music.component').then(m => m.BrowseMusicComponent),
+    path: '',
+    loadComponent: () => import('./pages/home/home.component').then(m => m.HomeComponent),
     canActivate: [authGuard]
   },
   {
-    path: 'browse-music',
-    redirectTo: '/music/browse',
-    pathMatch: 'full'
+    path: 'discover',
+    loadComponent: () => import('./pages/discover/discover.component').then(m => m.DiscoverComponent),
+    canActivate: [authGuard]
+  },
+  {
+    path: 'subscriptions',
+    loadComponent: () => import('./components/user/subscriptions.component').then(m => m.SubscriptionsComponent),
+    canActivate: [authGuard]
   },
 
-  // Default redirects
+  // Admin routes
   {
-    path: '',
-    redirectTo: '/music/browse',
-    pathMatch: 'full'
+    path: 'admin',
+    loadComponent: () => import('./pages/admin/admin.component').then(m => m.AdminComponent),
+    canActivate: [adminGuard]
   },
+
+  // Fallback route
   {
     path: '**',
-    redirectTo: '/auth/login'
+    redirectTo: ''
   }
 ];

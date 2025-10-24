@@ -1,20 +1,30 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection, provideAppInitializer, inject } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { provideHttpClient, withFetch } from '@angular/common/http';
 
 import { routes } from './app.routes';
 import { ConfigService } from './services/config.service';
-import { authInterceptor } from './interceptors/auth.interceptor';
+import { AuthService } from './services/auth.service';
+
+function initializeApp(configService: ConfigService, authService: AuthService) {
+  return () =>
+    configService.loadConfig().toPromise().then(() => {
+      authService.initializeWithConfig();
+    });
+}
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authInterceptor])),
-    provideAppInitializer(() => {
-      const configService = inject(ConfigService);
-      return configService.loadConfig();
-    })
+    provideAnimationsAsync(),
+    provideHttpClient(withFetch()),
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeApp,
+      deps: [ConfigService, AuthService],
+      multi: true
+    }
   ]
 };

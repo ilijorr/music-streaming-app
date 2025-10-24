@@ -4,7 +4,7 @@ import base64
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-s3_client = boto3.client('s3')
+s3_client = boto3.client('s3', region_name='eu-central-1')
 
 
 def generate_response(status_code: int, body: Any, headers: Optional[Dict] = None) -> Dict:
